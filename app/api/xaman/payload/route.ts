@@ -51,8 +51,8 @@ export async function POST(request: Request) {
     // and next.app_deeplink is the custom scheme. We provide both.
     return NextResponse.json({
       uuid: data.uuid,
-      next: data.next.always,
-      deeplink: data.next.app_deeplink || `xumm://payload/${data.uuid}`,
+      next: data.always || data.next.always,
+      deeplink: data.next.app_deeplink || `xumm://sign/${data.uuid}`,
       qrUrl: data.refs.qr_png,
       wsUrl: data.refs.websocket_status,
     })

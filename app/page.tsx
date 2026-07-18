@@ -78,7 +78,7 @@ export default function Page() {
 
       // Use the universal link (next) if deeplink is missing, 
       // fallback to the custom scheme. This ensures we never redirect to 'undefined'.
-      const redirectUrl = deeplink || next || `xumm://payload/${uuid}`
+      const redirectUrl = deeplink || next || `xumm://sign/${uuid}`
       window.location.href = redirectUrl
 
       const poll = setInterval(async () => {
