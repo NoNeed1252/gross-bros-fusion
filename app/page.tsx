@@ -20,6 +20,44 @@ export default function Page() {
 
   useEffect(() => {
     setMounted(true)
+
+    // Check if we are returning from Xaman redirect
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const redirectUuid = params.get('uuid')
+
+      if (redirectUuid) {
+        // Clear the query parameter to keep URL clean and prevent polling on reloads
+        window.history.replaceState({}, document.title, window.location.pathname)
+        setConnecting(true)
+
+        const poll = setInterval(async () => {
+          try {
+            const vRes = await fetch(`/api/xaman/verify?uuid=${redirectUuid}`)
+            const vData = await vRes.json()
+
+            if (vData.signed) {
+              clearInterval(poll)
+              setAddress(vData.user)
+              setXrpBalance(vData.balance)
+
+              const found = GROSS_BROS.filter(b => vData.ownedNfts.includes(b.tokenId))
+              setOwnedBros(found)
+
+              const currentBro = found.length > 0 ? found[0] : GROSS_BROS[0]
+              setBro(currentBro)
+
+              setConnected(true)
+              setConnecting(false)
+            }
+          } catch (err) {
+            console.error('Verify redirect poll error:', err)
+          }
+        }, 2000)
+
+        return () => clearInterval(poll)
+      }
+    }
   }, [])
 
   async function handleConnect() {
@@ -35,8 +73,6 @@ export default function Page() {
       // In a real app, we might open a popup, but spec says redirect.
       // Note: This redirect will stop execution, so polling needs to happen on return
       // or we handle it via a redirect back to this page with uuid.
-      // However, the spec asks to redirect AND start polling.
-      // Usually Xaman redirects back. For now following spec logic.
       window.location.href = `xumm://payload/${uuid}`
 
       const poll = setInterval(async () => {
