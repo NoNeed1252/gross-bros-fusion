@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 /**
  * API Route: Create Xaman Sign-In / Payment Payload
  * 
- * This endpoint communicates with the Xaman (Xumm) API to create a sign-in or 
+ * This endpoint communicates with the Xaman API to create a sign-in or 
  * payment request (Payload). It returns a websocket URL for status tracking 
  * and a deep-link/QR URL for the user to sign in their mobile wallet.
  */
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       uuid: data.uuid,
       next: data.always || data.next.always,
-      deeplink: data.next.app_deeplink || `xumm://sign/${data.uuid}`,
+      deeplink: data.next.app_deeplink || `xaman://sign/${data.uuid}`,
       qrUrl: data.refs.qr_png,
       wsUrl: data.refs.websocket_status,
     })
