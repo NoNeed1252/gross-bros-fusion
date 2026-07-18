@@ -11,12 +11,18 @@ import { NextResponse } from 'next/server'
 export async function POST(request: Request) {
   try {
     const { type, amount, destination } = await request.json()
+    const { origin } = new URL(request.url)
 
     // Base payload for Xaman API
-    // Replace API Key/Secret with environment variables in a real deployment
     const payloadBody: any = {
       txjson: {
         TransactionType: type === 'payment' ? 'Payment' : 'SignIn',
+      },
+      options: {
+        return_url: {
+          app: `${origin}/`,
+          web: `${origin}/`
+        }
       }
     }
 
