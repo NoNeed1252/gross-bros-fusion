@@ -76,9 +76,9 @@ export default function Page() {
 
       const { next, uuid, deeplink } = data
 
-      // Use the universal link (next) if deeplink is missing, 
-      // fallback to the custom scheme. This ensures we never redirect to 'undefined'.
-      const redirectUrl = deeplink || next || `xaman://sign/${uuid}`
+      // Prioritize deeplink (custom scheme) to bypass Safari Private Browsing blocks.
+      // Fallback to Universal Link (next) or hardcoded xumm:// sign protocol.
+      const redirectUrl = deeplink || next || `xumm://sign/${uuid}`
       window.location.href = redirectUrl
 
       const poll = setInterval(async () => {
