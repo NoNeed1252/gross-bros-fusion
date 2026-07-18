@@ -10,7 +10,7 @@
  *   Replace with a real Xaman sign-in that resolves the holder's Gross Bro NFT.
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { PortalHeader, PortalBottomNav, type TabId } from '@/components/portal-nav'
 import { PortalFooter } from '@/components/portal-footer'
 import { ChatTab } from '@/components/tabs/chat-tab'
@@ -19,11 +19,16 @@ import { ArcadeTab } from '@/components/tabs/arcade-tab'
 import { GROSS_BROS, pickRandomBro, type GrossBro } from '@/lib/gross-bros'
 
 export default function Page() {
+  const [mounted, setMounted] = useState(false)
   const [tab, setTab] = useState<TabId>('chat')
   const [connected, setConnected] = useState(false)
   const [connecting, setConnecting] = useState(false)
   // The Bro the connected wallet holds. Resolved from the XRPL on connect.
   const [bro, setBro] = useState<GrossBro>(GROSS_BROS[0])
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   function handleConnect() {
     setConnecting(true)
@@ -33,6 +38,10 @@ export default function Page() {
       setConnected(true)
       setConnecting(false)
     }, 1400)
+  }
+
+  if (!mounted) {
+    return <div className="portal-bg min-h-dvh" />
   }
 
   return (
