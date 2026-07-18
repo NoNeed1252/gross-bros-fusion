@@ -17,8 +17,8 @@ export async function GET(request: Request) {
     const response = await fetch(`https://xumm.app/api/v1/platform/payload/${uuid}`, {
       method: 'GET',
       headers: {
-        'X-API-Key': process.env.XUMM_API_KEY || '',
-        'X-API-Secret': process.env.XUMM_API_SECRET || '',
+        'X-API-Key': process.env.XAMAN_API_KEY || process.env.XUMM_API_KEY || '',
+        'X-API-Secret': process.env.XAMAN_API_SECRET || process.env.XUMM_API_SECRET || '',
       },
     })
 

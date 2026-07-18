@@ -35,8 +35,8 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': process.env.XUMM_API_KEY || '',
-        'X-API-Secret': process.env.XUMM_API_SECRET || '',
+        'X-API-Key': process.env.XAMAN_API_KEY || process.env.XUMM_API_KEY || '',
+        'X-API-Secret': process.env.XAMAN_API_SECRET || process.env.XUMM_API_SECRET || '',
       },
       body: JSON.stringify(payloadBody),
     })
