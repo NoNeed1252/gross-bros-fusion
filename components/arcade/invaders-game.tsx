@@ -49,6 +49,7 @@ type GameState = {
 const NEON = '#00ff9f'
 
 export function InvadersGame() {
+  const [mounted, setMounted] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const imagesRef = useRef<HTMLImageElement[]>([])
   const stateRef = useRef<GameState | null>(null)
@@ -67,14 +68,19 @@ export function InvadersGame() {
   const livesRef = useRef(3)
   const waveRef = useRef(1)
 
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   // Preload the NFT faces used as invader sprites.
   useEffect(() => {
+    if (!mounted) return
     imagesRef.current = GROSS_BROS.map((b) => {
       const img = new window.Image()
       img.src = b.image
       return img
     })
-  }, [])
+  }, [mounted])
 
   const spawnWave = useCallback((waveNum: number): Invader[] => {
     const invaders: Invader[] = []
@@ -127,8 +133,7 @@ export function InvadersGame() {
     for (const inv of s.invaders) {
       if (!inv.alive) continue
       ctx.save()
-      ctx.shadowColor = NEON
-      ctx.shadowBlur = 8
+      // REMOVED: ctx.shadowColor and shadowBlur to prevent WebKit canvas crashes
       const img = imgs[inv.img]
       if (img && img.complete && img.naturalWidth > 0) {
         ctx.beginPath()
@@ -143,16 +148,15 @@ export function InvadersGame() {
       }
       ctx.restore()
       // neon outline
-      ctx.strokeStyle = 'rgba(0,255,159,0.5)'
-      ctx.lineWidth = 1.5
+      ctx.strokeStyle = NEON
+      ctx.lineWidth = 2
       roundRect(ctx, inv.x, inv.y, INV_SIZE, INV_SIZE, 8)
       ctx.stroke()
     }
 
     // player ship
     ctx.save()
-    ctx.shadowColor = NEON
-    ctx.shadowBlur = 16
+    // REMOVED: ctx.shadowColor and shadowBlur
     ctx.fillStyle = NEON
     const px = s.playerX
     ctx.beginPath()
@@ -169,8 +173,7 @@ export function InvadersGame() {
 
     // bullets
     ctx.save()
-    ctx.shadowColor = NEON
-    ctx.shadowBlur = 10
+    // REMOVED: ctx.shadowColor and shadowBlur
     ctx.fillStyle = NEON
     for (const b of s.bullets) ctx.fillRect(b.x - 2, b.y, 4, 12)
     ctx.restore()
@@ -295,12 +298,14 @@ export function InvadersGame() {
 
   // Single rAF lifecycle
   useEffect(() => {
+    if (!mounted) return
     rafRef.current = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(rafRef.current)
-  }, [loop])
+  }, [loop, mounted])
 
   // Keyboard controls
   useEffect(() => {
+    if (!mounted) return
     const down = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase()
       if (['arrowleft', 'a'].includes(k)) keysRef.current.add('left')
@@ -322,7 +327,7 @@ export function InvadersGame() {
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
     }
-  }, [])
+  }, [mounted])
 
   // Touch button handlers
   const holdDir = (dir: 0 | -1 | 1) => () => {
@@ -332,6 +337,8 @@ export function InvadersGame() {
     if (on) keysRef.current.add('autofire')
     else keysRef.current.delete('autofire')
   }
+
+  if (!mounted) return <div className="aspect-[640/560] w-full rounded-2xl bg-[#0a1512]" />
 
   return (
     <div className="select-none">
@@ -359,14 +366,15 @@ export function InvadersGame() {
           </span>
         </div>
 
-        {/* Canvas */}
-        <div className="relative">
+        {/* Canvas Wrapper */}
+        <div 
+          className="relative w-full aspect-[640/560] touch-none"
+        >
           <canvas
             ref={canvasRef}
             width={GAME_W}
             height={GAME_H}
-            className="block h-auto w-full"
-            style={{ aspectRatio: `${GAME_W} / ${GAME_H}` }}
+            className="block w-full h-full"
           />
 
           {/* Overlays */}
