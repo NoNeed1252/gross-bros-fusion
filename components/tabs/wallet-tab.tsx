@@ -1,19 +1,5 @@
 'use client'
 
-/**
- * WALLET TAB
- *
- * This collection has no fungible token — holders deal in XRP + their
- * Galactic Gross Bros NFTs, so this tab shows the XRP balance and NFT
- * holdings instead of a token list.
- *
- * FUTURE INTEGRATION:
- * - Wire in the logic from https://github.com/NoNeed1252/xrp-community-wallet
- *   (XRP balance, send/receive, NFT holdings, tx history) via XRPL + Xaman.
- * - The sections below are clean placeholders designed to be swapped for
- *   live data without changing the layout.
- */
-
 import Image from 'next/image'
 import {
   Wallet,
@@ -31,9 +17,18 @@ const ACTIONS = [
   { icon: ArrowUpFromLine, label: 'Withdraw' },
 ]
 
-export function WalletTab({ connected, bro }: { connected: boolean; bro: GrossBro }) {
-  // Demo holdings — the connected wallet holds its resolved Bro.
-  const held = connected ? [bro] : []
+interface WalletTabProps {
+  connected: boolean
+  address: string
+  balance: string
+  ownedBros: GrossBro[]
+}
+
+export function WalletTab({ connected, address, balance, ownedBros }: WalletTabProps) {
+  const formatAddress = (addr: string) => {
+    if (!addr) return ''
+    return `${addr.slice(0, 8)}...${addr.slice(-8)}`
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -44,15 +39,16 @@ export function WalletTab({ connected, bro }: { connected: boolean; bro: GrossBr
           XRP Balance
         </div>
         <p className="mt-3 flex items-baseline gap-2 text-4xl font-bold tracking-tight text-foreground">
-          {connected ? '1,204.71' : '––––.––'}
+          {connected ? balance : '––––.––'}
           <span className="text-lg font-semibold text-primary text-glow">XRP</span>
         </p>
         {connected ? (
           <button
             type="button"
+            onClick={() => navigator.clipboard.writeText(address)}
             className="mt-2 flex items-center gap-1.5 font-mono text-xs text-muted-foreground transition-colors hover:text-primary"
           >
-            rNoNeed…7749Gross <Copy className="size-3" />
+            {formatAddress(address)} <Copy className="size-3" />
           </button>
         ) : (
           <p className="mt-2 font-mono text-xs text-muted-foreground">
@@ -81,13 +77,13 @@ export function WalletTab({ connected, bro }: { connected: boolean; bro: GrossBr
             Gross Bros Held
           </p>
           <span className="rounded-full bg-primary/15 px-2 py-0.5 font-mono text-[10px] text-primary">
-            {held.length} / {COLLECTION.totalNfts}
+            {ownedBros.length} / {COLLECTION.totalNfts}
           </span>
         </div>
 
-        {held.length > 0 ? (
+        {ownedBros.length > 0 ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {held.map((b) => (
+            {ownedBros.map((b) => (
               <div
                 key={b.tokenId}
                 className="overflow-hidden rounded-xl border border-border/70 bg-secondary/30 transition-all hover:border-primary/40"
@@ -114,7 +110,7 @@ export function WalletTab({ connected, bro }: { connected: boolean; bro: GrossBr
           <div className="rounded-xl border border-dashed border-border/70 py-10 text-center">
             <p className="text-sm text-muted-foreground">No Gross Bros detected.</p>
             <p className="mt-1 font-mono text-xs text-muted-foreground">
-              Connect your wallet to load your holdings.
+              {connected ? 'Collect a Bro to unlock identity features.' : 'Connect your wallet to load your holdings.'}
             </p>
           </div>
         )}
@@ -137,10 +133,6 @@ export function WalletTab({ connected, bro }: { connected: boolean; bro: GrossBr
           xrp.cafe <ExternalLink className="size-3.5" />
         </a>
       </div>
-
-      <p className="px-1 text-center font-mono text-[10px] tracking-wider text-muted-foreground">
-        {'// PLACEHOLDER — TO BE REPLACED WITH xrp-community-wallet LOGIC'}
-      </p>
     </div>
   )
 }
