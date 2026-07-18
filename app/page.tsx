@@ -68,12 +68,12 @@ export default function Page() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'SignIn' }),
       })
-      const { next, uuid } = await res.json()
+      const { next, uuid, deeplink } = await res.json()
 
       // In a real app, we might open a popup, but spec says redirect.
       // Note: This redirect will stop execution, so polling needs to happen on return
       // or we handle it via a redirect back to this page with uuid.
-      window.location.href = `xumm://payload/${uuid}`
+      window.location.href = deeplink
 
       const poll = setInterval(async () => {
         const vRes = await fetch(`/api/xaman/verify?uuid=${uuid}`)
