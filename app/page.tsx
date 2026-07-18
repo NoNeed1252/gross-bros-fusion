@@ -37,7 +37,7 @@ export default function Page() {
       // or we handle it via a redirect back to this page with uuid.
       // However, the spec asks to redirect AND start polling.
       // Usually Xaman redirects back. For now following spec logic.
-      window.location.href = next
+      window.location.href = `xumm://payload/${uuid}`
 
       const poll = setInterval(async () => {
         const vRes = await fetch(`/api/xaman/verify?uuid=${uuid}`)
