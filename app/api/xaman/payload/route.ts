@@ -20,8 +20,8 @@ export async function POST(request: Request) {
       },
       options: {
         return_url: {
-          app: `${origin}/`,
-          web: `${origin}/`
+          app: `${origin}/?uuid={id}`,
+          web: `${origin}/?uuid={id}`
         }
       }
     }
