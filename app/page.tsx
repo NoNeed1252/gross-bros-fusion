@@ -26,20 +26,24 @@ export default function Page() {
   const [ownedBros, setOwnedBros] = useState<GrossBro[]>([])
   const [connected, setConnected] = useState(false)
   const [connecting, setConnecting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [bro, setBro] = useState<GrossBro>(GROSS_BROS_LITE[0])
 
   const handleVerifyData = (data: any) => {
     if (data.signed) {
-      setAddress(data.user)
-      setXrpBalance(data.balance)
-      
       const resolved = (data.nfts || []).map((n: any) => resolveBro(n))
-      setOwnedBros(resolved)
       
-      if (resolved.length > 0) {
+      if (resolved.length === 0) {
+        setError('No Gross Bros detected in this wallet. Access denied.')
+        setConnected(false)
+      } else {
+        setAddress(data.user)
+        setXrpBalance(data.balance)
+        setOwnedBros(resolved)
         setBro(resolved[0])
+        setConnected(true)
+        setError(null)
       }
-      setConnected(true)
     }
     setConnecting(false)
   }
@@ -78,6 +82,7 @@ export default function Page() {
 
   async function handleConnect() {
     setConnecting(true)
+    setError(null)
     try {
       const res = await fetch('/api/xaman/payload', {
         method: 'POST',
@@ -120,7 +125,8 @@ export default function Page() {
             connecting={connecting} 
             bro={bro} 
             onConnect={handleConnect} 
-            ownedBros={ownedBros} 
+            ownedBros={ownedBros}
+            error={error}
           />
         )}
         {tab === 'wallet' && (

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
-import { Sparkles, Zap } from 'lucide-react'
+import { Sparkles, Zap, AlertTriangle } from 'lucide-react'
 import type { GrossBro } from '@/lib/gross-bros'
 import { NftIdentityCard } from '@/components/chat/nft-identity-card'
 import { TradeBotPanel, type BotAction } from '@/components/chat/trade-bot-panel'
@@ -16,6 +16,7 @@ interface ChatTabProps {
   connecting: boolean
   onConnect: () => void
   ownedBros: GrossBro[]
+  error?: string | null
 }
 
 export function ChatTab({
@@ -24,6 +25,7 @@ export function ChatTab({
   connecting,
   onConnect,
   ownedBros,
+  error,
 }: ChatTabProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: nextId(), role: 'system', text: 'NEURAL LINK ESTABLISHED' },
@@ -107,7 +109,7 @@ export function ChatTab({
   )
 
   if (!connected) {
-    return <ConnectGate bro={bro} connecting={connecting} onConnect={onConnect} />
+    return <ConnectGate bro={bro} connecting={connecting} onConnect={onConnect} error={error} />
   }
 
   return (
@@ -130,10 +132,12 @@ function ConnectGate({
   bro,
   connecting,
   onConnect,
+  error,
 }: {
   bro: GrossBro
   connecting: boolean
   onConnect: () => void
+  error?: string | null
 }) {
   return (
     <div className="mx-auto flex max-w-md flex-col items-center px-2 py-10 text-center">
@@ -151,6 +155,13 @@ function ConnectGate({
         has its own personality, backstory, and trade bot — ready to fight the
         Ledger Wars beside you.
       </p>
+
+      {error && (
+        <div className="mb-6 flex items-center gap-2.5 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-left text-xs text-destructive">
+          <AlertTriangle className="size-4 shrink-0" />
+          <p>{error}</p>
+        </div>
+      )}
 
       <button
         type="button"
