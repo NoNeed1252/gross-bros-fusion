@@ -21,10 +21,39 @@ export default function Page() {
   useEffect(() => {
     setMounted(true)
 
-    // Check if we are returning from Xaman redirect
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       const redirectUuid = params.get('uuid')
+      const xAppToken = params.get('xAppToken') || params.get('xappToken') || params.get('ott')
+
+      if (xAppToken) {
+        // Clear the query parameters to keep URL clean
+        window.history.replaceState({}, document.title, window.location.pathname)
+        setConnecting(true)
+
+        fetch(`/api/xaman/verify?xAppToken=${xAppToken}`)
+          .then(res => res.json())
+          .then(vData => {
+            if (vData.signed) {
+              setAddress(vData.user)
+              setXrpBalance(vData.balance)
+
+              const found = GROSS_BROS.filter(b => vData.ownedNfts.includes(b.tokenId))
+              setOwnedBros(found)
+
+              const currentBro = found.length > 0 ? found[0] : GROSS_BROS[0]
+              setBro(currentBro)
+
+              setConnected(true)
+            }
+            setConnecting(false)
+          })
+          .catch(err => {
+            console.error('Verify xAppToken error:', err)
+            setConnecting(false)
+          })
+        return
+      }
 
       if (redirectUuid) {
         // Clear the query parameter to keep URL clean and prevent polling on reloads
