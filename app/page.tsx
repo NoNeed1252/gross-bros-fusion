@@ -123,9 +123,9 @@ export default function Page() {
         window.xumm.xapp.openSignRequest({ uuid })
       } else {
         // Fallback to URL redirection
-        const redirectUrl = isXamanBrowser 
-          ? (next || deeplink || `xumm://sign/${uuid}`) 
-          : (deeplink || next || `xumm://sign/${uuid}`)
+        // Universal Link (next) is preferred over Custom Scheme (deeplink) 
+        // to ensure reliable native launch across external browsers.
+        const redirectUrl = next || deeplink || `xumm://sign/${uuid}`
         window.location.href = redirectUrl
       }
 
