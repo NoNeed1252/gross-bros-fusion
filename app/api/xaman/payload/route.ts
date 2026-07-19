@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       uuid: data.uuid,
       next: data.next?.always,
-      deeplink: `xumm://sign/\${data.uuid}`,
+      deeplink: `xumm://sign/${data.uuid}`,
       qrUrl: data.refs?.qr_png,
       wsUrl: data.refs?.websocket_status,
     })
