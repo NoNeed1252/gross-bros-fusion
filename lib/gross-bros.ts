@@ -72,6 +72,9 @@ export const GROSS_BROS_LITE: GrossBro[] = [
   },
 ]
 
+// Restore missing export for Arcade component compatibility
+export const GROSS_BROS = GROSS_BROS_LITE;
+
 export function getDeterministicStats(tokenId: string) {
   const n = parseInt(tokenId) || 0
   return {
