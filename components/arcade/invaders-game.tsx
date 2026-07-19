@@ -1,9 +1,9 @@
 'use client'
 
 /**
- * GROSS INVADERS — UPGRADED
+ * GROSS INVADERS — ARCADE UPGRADE
  *
- * 1. Barriers: Destructible bunkers.
+ * 1. Power-ups: Shields, Double Shots, Speed Boosts.
  * 2. Player Ship: Render active Gross Bro NFT face.
  * 3. Enemies: Retro spaceship/bug sprites.
  */
@@ -17,7 +17,7 @@ const GAME_H = 560
 const PLAYER_W = 44
 const PLAYER_H = 44
 const PLAYER_Y = GAME_H - 70
-const PLAYER_SPEED = 6
+const PLAYER_SPEED_BASE = 6
 
 const BULLET_SPEED = 9
 const BOMB_SPEED = 3.4
@@ -35,26 +35,42 @@ const BARRIER_W = 64
 const BARRIER_H = 40
 const BARRIER_Y = PLAYER_Y - 80
 
+const POWERUP_SIZE = 24
+const POWERUP_SPEED = 2.5
+
 type Vec = { x: number; y: number }
 type Invader = { x: number; y: number; alive: boolean; type: number }
 type Barrier = { x: number; y: number; health: number }
+
+type PowerUpType = 'shield' | 'double' | 'speed'
+type PowerUp = { x: number; y: number; type: PowerUpType }
 
 type Status = 'idle' | 'playing' | 'over'
 
 type GameState = {
   playerX: number
+  playerSpeed: number
   bullets: Vec[]
   bombs: Vec[]
   invaders: Invader[]
   barriers: Barrier[]
+  powerups: PowerUp[]
   dir: number
   speed: number
   fireCooldown: number
   bombTimer: number
+  activeShield: number // timer
+  activeDouble: number // timer
+  activeSpeed: number  // timer
 }
 
 const NEON = '#00ff9f'
 const ENEMY_COLORS = ['#ff00ff', '#00d2ff', '#ff5470', '#ffe600']
+const POWERUP_COLORS = {
+  shield: '#00d2ff',
+  double: '#ff00ff',
+  speed: '#ffe600'
+}
 
 export function InvadersGame({ bro }: { bro: GrossBro }) {
   const [mounted, setMounted] = useState(false)
@@ -80,7 +96,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
     setMounted(true)
   }, [])
 
-  // Load active Bro image for the player ship
   useEffect(() => {
     if (!mounted) return
     const img = new window.Image()
@@ -98,7 +113,7 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
           x: OFFSET_X + c * (INV_SIZE + GAP_X),
           y: OFFSET_Y + r * (INV_SIZE + GAP_Y),
           alive: true,
-          type: r % 4, // different enemy types
+          type: r % 4,
         })
       }
     }
@@ -121,14 +136,19 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
   const initState = useCallback(
     (waveNum: number): GameState => ({
       playerX: GAME_W / 2 - PLAYER_W / 2,
+      playerSpeed: PLAYER_SPEED_BASE,
       bullets: [],
       bombs: [],
       invaders: spawnWave(waveNum),
       barriers: initBarriers(),
+      powerups: [],
       dir: 1,
       speed: 0.7 + waveNum * 0.3,
       fireCooldown: 0,
       bombTimer: 60,
+      activeShield: 0,
+      activeDouble: 0,
+      activeSpeed: 0
     }),
     [spawnWave, initBarriers],
   )
@@ -137,7 +157,12 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
     statusRef.current = 'over'
     setStatus('over')
     setBest((b) => Math.max(b, scoreRef.current))
-  }, [])
+    
+    // Notify High Score
+    if (scoreRef.current > 0) {
+      console.log('Final Score:', scoreRef.current, 'for address:', bro.owner);
+    }
+  }, [bro.owner])
 
   const drawEnemy = (ctx: CanvasRenderingContext2D, x: number, y: number, type: number, step: number) => {
     ctx.fillStyle = ENEMY_COLORS[type]
@@ -150,7 +175,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       ctx.fillRect(x, y + 6*s, 12*s, 2*s)
       ctx.fillRect(x + 2*s, y + 8*s, 2*s, 2*s)
       ctx.fillRect(x + 8*s, y + 8*s, 2*s, 2*s)
-      // legs
       if (step % 2 === 0) {
         ctx.fillRect(x, y + 2*s, 2*s, 2*s)
         ctx.fillRect(x + 10*s, y + 2*s, 2*s, 2*s)
@@ -176,8 +200,8 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       }
     } else { // Robot
       ctx.fillRect(x + 2*s, y, 8*s, 8*s)
-      ctx.fillRect(x + 4*s, y + 2*s, 1.5*s, 1.5*s) // eye
-      ctx.fillRect(x + 6.5*s, y + 2*s, 1.5*s, 1.5*s) // eye
+      ctx.fillRect(x + 4*s, y + 2*s, 1.5*s, 1.5*s)
+      ctx.fillRect(x + 6.5*s, y + 2*s, 1.5*s, 1.5*s)
       ctx.fillRect(x, y + 8*s, 12*s, 2*s)
     }
   }
@@ -185,7 +209,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
   const draw = useCallback((ctx: CanvasRenderingContext2D, s: GameState | null) => {
     ctx.clearRect(0, 0, GAME_W, GAME_H)
 
-    // starfield dots
     ctx.fillStyle = 'rgba(0,255,159,0.12)'
     for (let i = 0; i < 40; i++) {
       const x = (i * 97) % GAME_W
@@ -195,7 +218,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
 
     if (!s) return
 
-    // Barriers
     for (const b of s.barriers) {
       if (b.health <= 0) continue
       ctx.fillStyle = `rgba(0, 255, 159, ${b.health / 12})`
@@ -203,12 +225,10 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       ctx.lineWidth = 1
       const bx = b.x
       const by = b.y
-      // Draw bunker shape
       ctx.beginPath()
       ctx.roundRect(bx, by, BARRIER_W, BARRIER_H, 4)
       ctx.fill()
       ctx.stroke()
-      // Damage cracks
       if (b.health < 8) {
         ctx.strokeStyle = '#0a1512'
         ctx.beginPath()
@@ -218,37 +238,54 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       }
     }
 
-    // Enemies (Procedural)
     const stepCount = Math.floor(Date.now() / 500)
     for (const inv of s.invaders) {
       if (!inv.alive) continue
       drawEnemy(ctx, inv.x, inv.y, inv.type, stepCount)
     }
 
-    // Player (Gross Bro Image)
+    // Power-ups
+    for (const pu of s.powerups) {
+      ctx.fillStyle = POWERUP_COLORS[pu.type]
+      ctx.beginPath()
+      ctx.arc(pu.x + POWERUP_SIZE/2, pu.y + POWERUP_SIZE/2, POWERUP_SIZE/2, 0, Math.PI*2)
+      ctx.fill()
+      ctx.fillStyle = '#0a1512'
+      ctx.font = 'bold 12px monospace'
+      ctx.textAlign = 'center'
+      ctx.fillText(pu.type[0].toUpperCase(), pu.x + POWERUP_SIZE/2, pu.y + POWERUP_SIZE/2 + 4)
+    }
+
+    // Player
     ctx.save()
+    if (s.activeShield > 0) {
+      ctx.strokeStyle = POWERUP_COLORS.shield
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.arc(s.playerX + PLAYER_W/2, PLAYER_Y + PLAYER_H/2, PLAYER_W * 0.8, 0, Math.PI*2)
+      ctx.stroke()
+      ctx.fillStyle = 'rgba(0, 210, 255, 0.1)'
+      ctx.fill()
+    }
+
     const pimg = playerImgRef.current
     if (pimg && pimg.complete && pimg.naturalWidth > 0) {
       ctx.beginPath()
       ctx.roundRect(s.playerX, PLAYER_Y, PLAYER_W, PLAYER_H, 8)
       ctx.clip()
       ctx.drawImage(pimg, s.playerX, PLAYER_Y, PLAYER_W, PLAYER_H)
-      // Neon frame for the NFT ship
-      ctx.strokeStyle = NEON
+      ctx.strokeStyle = s.activeSpeed > 0 ? POWERUP_COLORS.speed : NEON
       ctx.lineWidth = 2
       ctx.strokeRect(s.playerX, PLAYER_Y, PLAYER_W, PLAYER_H)
     } else {
-      // Fallback ship
       ctx.fillStyle = NEON
       ctx.fillRect(s.playerX, PLAYER_Y, PLAYER_W, PLAYER_H)
     }
     ctx.restore()
 
-    // Bullets (Player)
-    ctx.fillStyle = NEON
+    ctx.fillStyle = s.activeDouble > 0 ? POWERUP_COLORS.double : NEON
     for (const b of s.bullets) ctx.fillRect(b.x - 2, b.y, 4, 12)
 
-    // Bombs (Enemies)
     ctx.fillStyle = '#ff5470'
     for (const b of s.bombs) ctx.fillRect(b.x - 2, b.y, 4, 12)
   }, [])
@@ -262,25 +299,35 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
     const s = stateRef.current
 
     if (statusRef.current === 'playing' && s) {
-      // --- movement ---
+      if (s.activeShield > 0) s.activeShield--
+      if (s.activeDouble > 0) s.activeDouble--
+      if (s.activeSpeed > 0) {
+        s.activeSpeed--
+        s.playerSpeed = PLAYER_SPEED_BASE * 1.6
+      } else {
+        s.playerSpeed = PLAYER_SPEED_BASE
+      }
+
       let move = 0
       if (keysRef.current.has('left')) move -= 1
       if (keysRef.current.has('right')) move += 1
       move += touchDirRef.current
-      s.playerX = clamp(s.playerX + move * PLAYER_SPEED, 4, GAME_W - PLAYER_W - 4)
+      s.playerX = clamp(s.playerX + move * s.playerSpeed, 4, GAME_W - PLAYER_W - 4)
 
-      // --- player fire ---
       if (s.fireCooldown > 0) s.fireCooldown--
       if ((keysRef.current.has('fire') || keysRef.current.has('autofire')) && s.fireCooldown === 0) {
-        s.bullets.push({ x: s.playerX + PLAYER_W / 2, y: PLAYER_Y })
+        if (s.activeDouble > 0) {
+          s.bullets.push({ x: s.playerX + 10, y: PLAYER_Y })
+          s.bullets.push({ x: s.playerX + PLAYER_W - 10, y: PLAYER_Y })
+        } else {
+          s.bullets.push({ x: s.playerX + PLAYER_W / 2, y: PLAYER_Y })
+        }
         s.fireCooldown = 18
       }
 
-      // --- bullets ---
       s.bullets = s.bullets.filter((b) => b.y > -20)
       for (const b of s.bullets) {
         b.y -= BULLET_SPEED
-        // Bullet vs Barrier
         for (const bar of s.barriers) {
           if (bar.health > 0 && b.x > bar.x && b.x < bar.x + BARRIER_W && b.y > bar.y && b.y < bar.y + BARRIER_H) {
             bar.health -= 1
@@ -289,7 +336,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
         }
       }
 
-      // --- invader movement ---
       const alive = s.invaders.filter((i) => i.alive)
       let hitEdge = false
       const step = s.speed + (ROWS * COLS - alive.length) * 0.08
@@ -304,7 +350,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
         for (const inv of s.invaders) if (inv.alive) inv.x += s.dir * step
       }
 
-      // --- invader bombs ---
       s.bombTimer--
       if (s.bombTimer <= 0 && alive.length > 0) {
         const shooter = alive[Math.floor(Math.random() * alive.length)]
@@ -314,7 +359,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       s.bombs = s.bombs.filter((b) => b.y < GAME_H + 20)
       for (const b of s.bombs) {
         b.y += BOMB_SPEED
-        // Bomb vs Barrier
         for (const bar of s.barriers) {
           if (bar.health > 0 && b.x > bar.x && b.x < bar.x + BARRIER_W && b.y > bar.y && b.y < bar.y + BARRIER_H) {
             bar.health -= 1
@@ -323,7 +367,18 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
         }
       }
 
-      // --- collisions: bullet vs invader ---
+      // Power-up movement and collection
+      s.powerups = s.powerups.filter(pu => pu.y < GAME_H + 20)
+      for (const pu of s.powerups) {
+        pu.y += POWERUP_SPEED
+        if (pu.x > s.playerX - POWERUP_SIZE && pu.x < s.playerX + PLAYER_W && pu.y > PLAYER_Y && pu.y < PLAYER_Y + PLAYER_H) {
+          if (pu.type === 'shield') s.activeShield = 600
+          if (pu.type === 'double') s.activeDouble = 600
+          if (pu.type === 'speed') s.activeSpeed = 600
+          pu.y = GAME_H + 200
+        }
+      }
+
       for (const b of s.bullets) {
         for (const inv of s.invaders) {
           if (!inv.alive) continue
@@ -332,31 +387,36 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
             b.y = -100
             scoreRef.current += 15
             setScore(scoreRef.current)
+            // Power-up Drop Chance
+            if (Math.random() < 0.15) {
+              const types: PowerUpType[] = ['shield', 'double', 'speed']
+              s.powerups.push({
+                x: inv.x + INV_SIZE/2 - POWERUP_SIZE/2,
+                y: inv.y + INV_SIZE/2,
+                type: types[Math.floor(Math.random() * types.length)]
+              })
+            }
           }
         }
       }
 
-      // --- collisions: bomb vs player ---
       for (const b of s.bombs) {
-        if (
-          b.x > s.playerX &&
-          b.x < s.playerX + PLAYER_W &&
-          b.y > PLAYER_Y &&
-          b.y < PLAYER_Y + PLAYER_H
-        ) {
+        if (b.x > s.playerX && b.x < s.playerX + PLAYER_W && b.y > PLAYER_Y && b.y < PLAYER_Y + PLAYER_H) {
           b.y = GAME_H + 200
-          livesRef.current -= 1
-          setLives(livesRef.current)
-          if (livesRef.current <= 0) endGame()
+          if (s.activeShield > 0) {
+            s.activeShield = 0
+          } else {
+            livesRef.current -= 1
+            setLives(livesRef.current)
+            if (livesRef.current <= 0) endGame()
+          }
         }
       }
 
-      // --- invaders reach the player ---
       if (s.invaders.some((i) => i.alive && i.y + INV_SIZE >= BARRIER_Y)) {
         endGame()
       }
 
-      // --- wave cleared ---
       if (s.invaders.every((i) => !i.alive)) {
         waveRef.current += 1
         setWave(waveRef.current)
@@ -424,7 +484,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
   return (
     <div className="select-none">
       <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-[#0a1512] neon-border">
-        {/* HUD */}
         <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5 font-mono text-[11px] uppercase tracking-wider">
           <span className="text-muted-foreground">Score <span className="text-primary">{score}</span></span>
           <span className="text-muted-foreground">Wave <span className="text-primary">{wave}</span></span>
@@ -438,7 +497,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
           </span>
         </div>
 
-        {/* Canvas Wrapper */}
         <div className="relative w-full aspect-[640/560] touch-none">
           <canvas ref={canvasRef} width={GAME_W} height={GAME_H} className="block w-full h-full" />
           {status !== 'playing' && (
@@ -458,7 +516,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
         </div>
       </div>
 
-      {/* Touch controls (mobile) */}
       <div className="mt-4 grid grid-cols-3 gap-3 md:hidden">
         <button type="button" onPointerDown={holdDir(-1)} onPointerUp={holdDir(0)} className="flex h-16 items-center justify-center rounded-xl border border-border/70 bg-card/60 text-2xl font-bold text-primary active:bg-primary/15">‹</button>
         <button type="button" onPointerDown={holdFire(true)} onPointerUp={holdFire(false)} className="flex h-16 items-center justify-center rounded-xl bg-primary text-sm font-bold uppercase tracking-wider text-primary-foreground active:opacity-80 neon-ring">Fire</button>
