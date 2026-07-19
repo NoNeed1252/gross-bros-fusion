@@ -57,6 +57,9 @@ export const GROSS_BROS_LITE: GrossBro[] = [
   },
 ]
 
+// Alias for backwards compatibility if needed elsewhere
+export const GROSS_BROS = GROSS_BROS_LITE;
+
 export function getDeterministicStats(tokenId: string) {
   const n = parseInt(tokenId) || 0
   return {
