@@ -8,6 +8,16 @@ import { WalletTab } from '@/components/tabs/wallet-tab'
 import { ArcadeTab } from '@/components/tabs/arcade-tab'
 import { GROSS_BROS, type GrossBro } from '@/lib/gross-bros'
 
+declare global {
+  interface Window {
+    xumm?: {
+      xapp?: {
+        openSignRequest: (args: { uuid: string }) => void
+      }
+    }
+  }
+}
+
 export default function Page() {
   const [mounted, setMounted] = useState(false)
   const [tab, setTab] = useState<TabId>('chat')
@@ -105,14 +115,19 @@ export default function Page() {
 
       const { next, uuid, deeplink } = data
 
+      // Check for Xaman native bridge
       const isXamanBrowser = typeof window !== 'undefined' && /xumm|xaman/i.test(navigator.userAgent)
-
-      // Prioritize deeplink (custom scheme) to bypass Safari Private Browsing blocks.
-      // Fallback to Universal Link (next) or hardcoded xumm:// sign protocol.
-      const redirectUrl = isXamanBrowser 
-        ? (next || deeplink || `xumm://sign/${uuid}`) 
-        : (deeplink || next || `xumm://sign/${uuid}`)
-      window.location.href = redirectUrl
+      
+      if (isXamanBrowser && window.xumm?.xapp?.openSignRequest) {
+        // Use native bridge for better UX in xApp
+        window.xumm.xapp.openSignRequest({ uuid })
+      } else {
+        // Fallback to URL redirection
+        const redirectUrl = isXamanBrowser 
+          ? (next || deeplink || `xumm://sign/${uuid}`) 
+          : (deeplink || next || `xumm://sign/${uuid}`)
+        window.location.href = redirectUrl
+      }
 
       const poll = setInterval(async () => {
         const vRes = await fetch(`/api/xaman/verify?uuid=${uuid}`)
