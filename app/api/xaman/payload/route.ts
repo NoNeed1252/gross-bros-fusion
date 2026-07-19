@@ -48,11 +48,11 @@ export async function POST(request: Request) {
     }
 
     // next.always is the universal link (HTTPS)
-    // refs.qr_uri natively contains the xumm:// custom scheme URI
+    // Force native protocol custom scheme URI
     return NextResponse.json({
       uuid: data.uuid,
       next: data.next?.always,
-      deeplink: data.refs?.qr_uri || `xumm://sign/${data.uuid}`,
+      deeplink: `xumm://sign/\${data.uuid}`,
       qrUrl: data.refs?.qr_png,
       wsUrl: data.refs?.websocket_status,
     })
