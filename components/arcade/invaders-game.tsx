@@ -75,11 +75,14 @@ export function InvadersGame() {
   // Preload the NFT faces used as invader sprites.
   useEffect(() => {
     if (!mounted) return
-    imagesRef.current = GROSS_BROS.map((b) => {
-      const img = new window.Image()
-      img.src = b.image
-      return img
-    })
+    // Only preload if we haven't already
+    if (imagesRef.current.length === 0) {
+      imagesRef.current = GROSS_BROS.map((b) => {
+        const img = new window.Image()
+        img.src = b.image
+        return img
+      })
+    }
   }, [mounted])
 
   const spawnWave = useCallback((waveNum: number): Invader[] => {
@@ -117,7 +120,7 @@ export function InvadersGame() {
     setBest((b) => Math.max(b, scoreRef.current))
   }, [])
 
-  const draw = useCallback((ctx: CanvasRenderingContext2D, s: GameState) => {
+  const draw = useCallback((ctx: CanvasRenderingContext2D, s: GameState | null) => {
     ctx.clearRect(0, 0, GAME_W, GAME_H)
 
     // starfield dots
@@ -128,12 +131,13 @@ export function InvadersGame() {
       ctx.fillRect(x, y, 2, 2)
     }
 
+    if (!s) return
+
     // invaders (NFT faces)
     const imgs = imagesRef.current
     for (const inv of s.invaders) {
       if (!inv.alive) continue
       ctx.save()
-      // REMOVED: ctx.shadowColor and shadowBlur to prevent WebKit canvas crashes
       const img = imgs[inv.img]
       if (img && img.complete && img.naturalWidth > 0) {
         ctx.beginPath()
@@ -156,7 +160,6 @@ export function InvadersGame() {
 
     // player ship
     ctx.save()
-    // REMOVED: ctx.shadowColor and shadowBlur
     ctx.fillStyle = NEON
     const px = s.playerX
     ctx.beginPath()
@@ -173,7 +176,6 @@ export function InvadersGame() {
 
     // bullets
     ctx.save()
-    // REMOVED: ctx.shadowColor and shadowBlur
     ctx.fillStyle = NEON
     for (const b of s.bullets) ctx.fillRect(b.x - 2, b.y, 4, 12)
     ctx.restore()
@@ -185,12 +187,13 @@ export function InvadersGame() {
 
   const loop = useCallback(() => {
     const canvas = canvasRef.current
-    const s = stateRef.current
-    if (!canvas || !s) return
+    if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    if (statusRef.current === 'playing') {
+    const s = stateRef.current
+
+    if (statusRef.current === 'playing' && s) {
       // --- movement ---
       let move = 0
       if (keysRef.current.has('left')) move -= 1
@@ -379,7 +382,7 @@ export function InvadersGame() {
 
           {/* Overlays */}
           {status !== 'playing' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-background/80 px-6 text-center backdrop-blur-sm">
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-background/80 px-6 text-center backdrop-blur-sm">
               <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
                 XRP-7 · ARCADE
               </p>
