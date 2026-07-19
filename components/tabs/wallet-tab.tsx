@@ -112,7 +112,7 @@ export function WalletTab({
                   />
                   {activeBroId === b.tokenId && (
                     <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
-                      <div className="bg-primary px-2 py-0.5 rounded-full font-mono text-[8px] uppercase tracking-wider text-primary-foreground">
+                      <div className="bg-primary px-2 py-0.5 rounded-full font-mono text-[8px] uppercase tracking-wider text-primary-foreground shadow-[0_0_10px_rgba(var(--primary),0.5)]">
                         Active
                       </div>
                     </div>

@@ -115,7 +115,13 @@ export default function Page() {
       <PortalHeader active={tab} onChange={setTab} />
       <main className="relative z-10 flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-10">
         {tab === 'chat' && (
-          <ChatTab connected={connected} connecting={connecting} bro={bro} onConnect={handleConnect} ownedBros={ownedBros} />
+          <ChatTab 
+            connected={connected} 
+            connecting={connecting} 
+            bro={bro} 
+            onConnect={handleConnect} 
+            ownedBros={ownedBros} 
+          />
         )}
         {tab === 'wallet' && (
           <WalletTab 
@@ -124,8 +130,8 @@ export default function Page() {
             balance={xrpBalance} 
             ownedBros={ownedBros} 
             activeBroId={bro.tokenId}
-            onSelectBro={(b) => {
-              setBro(b)
+            onSelectBro={(selected) => {
+              setBro(selected)
               setTab('chat')
             }}
           />
