@@ -85,6 +85,16 @@ export function getDeterministicStats(tokenId: string) {
   }
 }
 
+/**
+ * Universal IPFS to Gateway Link
+ */
+export function getIpfsUrl(uri: string): string {
+  if (!uri) return ''
+  const clean = uri.replace('ipfs://', '').replace('/ipfs/', '')
+  // Prioritize xrp.cafe/XLS-20 standard gateway for reliability
+  return `https://ipfs.io/ipfs/${clean}`
+}
+
 export function resolveBro(rawNft: any): GrossBro {
   const tokenId = parseInt(rawNft.NFTokenID.slice(-8), 16).toString()
   const cached = GROSS_BROS_LITE.find(b => b.tokenId === tokenId)
@@ -100,10 +110,13 @@ export function resolveBro(rawNft: any): GrossBro {
   const stats = getDeterministicStats(tokenId)
   const name = metadata.name || `Gross Bros #${tokenId}`
   
+  // Resolve image using the new helper
+  const imageUrl = metadata.image ? getIpfsUrl(metadata.image) : `https://xrp.cafe/ipfs/QmS8P1yXm7S7G3wP5y8Jp4YmZz6Xn8N9K6L7M8R9Q0P1O2/gross-bro-${tokenId}.png`
+
   return {
     tokenId,
     name,
-    image: metadata.image?.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/') || `https://ipfs.io/ipfs/QmS8P1yXm7S7G3wP5y8Jp4YmZz6Xn8N9K6L7M8R9Q0P1O2/gross-bro-${tokenId}.png`,
+    image: imageUrl,
     species: personality.species,
     faction: 'Deep Space Drifters',
     traits,
