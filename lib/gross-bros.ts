@@ -11,7 +11,7 @@ export const COLLECTION = {
   totalNfts: 200,
   holders: 41,
   floorXrp: 15,
-  desc: "The Galactic Gross Bros emerged from the cosmic wreckage of a failed interplanetary mining operation on XRP-7, a distant asteroid rich with a volatile energy source tied to the XRP Ledger. When the miners accidentally unleashed a mutated strain of alien life, these grotesque, big-eyed entities were born, fused with the Ledger's digital essence.",
+  desc: "The Galactic Gross Bros emerged from the cosmic wreckage of a failed interplanetary mining operation on XRP-7, a distant asteroid rich with a volatile energy source tied to the XRP Ledger.",
 } as const
 
 export type Trait = { type: string; value: string }
@@ -30,6 +30,29 @@ export type GrossBro = {
   demoReplies: string[]
 }
 
+const PERSONALITY_TRAITS: Record<string, { species: string, prompt: string, replies: string[] }> = {
+  'Ooze': {
+    species: 'Ooze-Class Rebel',
+    prompt: 'You are a chaotic, slime-dripping rebel. Talk with high-energy crypto-trader slang and alien grit.',
+    replies: ['Green candles on XRP-7! Deal with it.', 'Status: 100% slime, 100% gains.']
+  },
+  'Toxin': {
+    species: 'Toxic Harbinger',
+    prompt: 'You are a cynical, sharp-tongued survivor. You treat the market like a bio-hazard and your holder like a lab partner.',
+    replies: ['Careful, holder. The air here is as toxic as a rugpull.', 'Systems corroded, but I am still standing.']
+  },
+  'Spore': {
+    species: 'Spore Drifter',
+    prompt: 'You are an airy, philosophical entity. You speak in riddles about the blockchain and the cosmic void.',
+    replies: ['The block is born, the block dies, the spore remains.', 'Can you hear the ledger whispering?']
+  },
+  'Bile': {
+    species: 'Bile Mutant',
+    prompt: 'You are a gritty, short-tempered brawler. You hate red candles and love raw XRP energy.',
+    replies: ['Bleh! Smells like a dump coming. Hold tight.', 'I do not trade for fun, I trade for survival.']
+  }
+}
+
 export const GROSS_BROS_LITE: GrossBro[] = [
   {
     tokenId: '86',
@@ -38,27 +61,16 @@ export const GROSS_BROS_LITE: GrossBro[] = [
     species: 'Ooze-Class Rebel',
     faction: 'XRP-7 Liberation Front',
     traits: [
-      { type: 'Background', value: 'Teal' },
-      { type: 'Profile', value: 'Blue Shirt' },
-      { type: 'Mouth', value: 'Gross Mouth' },
-      { type: 'Eyes', value: 'Shocked Black' },
+      { type: 'Species', value: 'Ooze' },
       { type: 'Shades', value: 'Deal With It' },
     ],
     stats: { chaos: 91, slime: 88, loyalty: 76, degeneracy: 94 },
     tagline: 'Deal with it, holder.',
-    backstory: 'Born from the cosmic wreckage of the XRP-7 mining disaster, fused with the raw energy of the Ledger. #86 crawled out of the reactor with its shades already on and its mouth already running. It has never once been caught off guard by a red candle.',
-    systemPrompt: 'You are Gross Bros #86, a cocky alien rebel from planet XRP-7 wearing pixel "deal with it" shades. You talk with chaotic, over-confident degenerate crypto-trader energy, drop alien slang, and treat your holder like a fellow rebel. Keep replies short, punchy, and gross.',
-    demoReplies: [
-      'Bleh. Markets are dripping green today, holder. Deal with it.',
-      'Say the word and I flip the bot ON. We ride the XRP-7 candles till dawn.',
-      'Status? Shades on, slime up, 100% loyal to you. Standing by.',
-      'The mining disaster taught me one thing: never trade scared, always trade gross.',
-    ],
+    backstory: 'Born from the cosmic wreckage of the XRP-7 mining disaster.',
+    systemPrompt: 'You are Gross Bros #86, a cocky alien rebel wearing pixel "deal with it" shades. Keep replies short, punchy, and gross.',
+    demoReplies: ['Bleh. Markets are dripping green today. Deal with it.'],
   },
 ]
-
-// Alias for backwards compatibility if needed elsewhere
-export const GROSS_BROS = GROSS_BROS_LITE;
 
 export function getDeterministicStats(tokenId: string) {
   const n = parseInt(tokenId) || 0
@@ -70,54 +82,32 @@ export function getDeterministicStats(tokenId: string) {
   }
 }
 
-/**
- * Browser-safe hex to UTF8 parser (replaces Buffer for client-side compat)
- */
-function hexToUtf8(hex: string): string {
-  if (!hex) return ''
-  try {
-    const bytes = new Uint8Array(hex.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || [])
-    return new TextDecoder().decode(bytes)
-  } catch (e) {
-    return ''
-  }
-}
-
 export function resolveBro(rawNft: any): GrossBro {
   const tokenId = parseInt(rawNft.NFTokenID.slice(-8), 16).toString()
   const cached = GROSS_BROS_LITE.find(b => b.tokenId === tokenId)
   if (cached) return cached
 
-  // Resolve metadata from URI (Hex)
-  let metadata: any = {}
-  try {
-    const hex = rawNft.URI || ''
-    const uri = hexToUtf8(hex)
-    // Simplified: check if it's IPFS
-    const ipfsHash = uri.replace('ipfs://', '').replace('https://ipfs.io/ipfs/', '')
-    // In a real app we'd fetch this, but for dynamic fallback we generate from traits if available
-    // or use deterministic defaults
-  } catch (e) {}
+  const metadata = rawNft.enrichedMetadata || {}
+  const traits: Trait[] = metadata.attributes?.map((a: any) => ({ type: a.trait_type, value: a.value })) || []
+  
+  // Dynamic Personality Mapping
+  const speciesTrait = traits.find(t => ['Species', 'Type', 'Class'].includes(t.type))?.value || 'Ooze'
+  const personality = PERSONALITY_TRAITS[speciesTrait] || PERSONALITY_TRAITS['Ooze']
 
   const stats = getDeterministicStats(tokenId)
-  const name = `Gross Bros #${tokenId}`
+  const name = metadata.name || `Gross Bros #${tokenId}`
   
-  // Deterministic fallback identity
   return {
     tokenId,
     name,
-    image: `https://ipfs.io/ipfs/QmS8P1yXm7S7G3wP5y8Jp4YmZz6Xn8N9K6L7M8R9Q0P1O2/gross-bro-${tokenId}.png`, // Example IPFS path pattern
-    species: 'Unclassified Mutant',
+    image: metadata.image?.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/') || `https://ipfs.io/ipfs/QmS8P1yXm7S7G3wP5y8Jp4YmZz6Xn8N9K6L7M8R9Q0P1O2/gross-bro-${tokenId}.png`,
+    species: personality.species,
     faction: 'Deep Space Drifters',
-    traits: [],
+    traits,
     stats,
     tagline: 'Surviving the Ledger, one block at a time.',
-    backstory: 'A mysterious survivor of the XRP-7 disaster whose files were corrupted during the mining facility meltdown.',
-    systemPrompt: `You are ${name}, a survivor of the XRP-7 cosmic wreckage. You speak with raw, gritty, alien energy. Keep replies short and gross.`,
-    demoReplies: [
-      'The void is loud today, holder. I am listening.',
-      'Bot engaged. I follow the slime trails to the gains.',
-      'Status: All systems functional, barely. Standing by.',
-    ]
+    backstory: metadata.description || 'A mysterious survivor of the XRP-7 disaster.',
+    systemPrompt: personality.prompt,
+    demoReplies: personality.replies
   }
 }

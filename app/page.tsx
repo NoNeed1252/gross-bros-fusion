@@ -1,22 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { PortalHeader, PortalBottomNav, type TabId } from '@/components/portal-nav'
 import { PortalFooter } from '@/components/portal-footer'
 import { ChatTab } from '@/components/tabs/chat-tab'
 import { WalletTab } from '@/components/tabs/wallet-tab'
 import { ArcadeTab } from '@/components/tabs/arcade-tab'
 import { GROSS_BROS_LITE, resolveBro, type GrossBro } from '@/lib/gross-bros'
-
-declare global {
-  interface Window {
-    xumm?: {
-      xapp?: {
-        openSignRequest: (args: { uuid: string }) => void
-      }
-    }
-  }
-}
 
 export default function Page() {
   const [mounted, setMounted] = useState(false)
@@ -28,11 +18,26 @@ export default function Page() {
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [bro, setBro] = useState<GrossBro>(GROSS_BROS_LITE[0])
+  
+  const pollRef = useRef<NodeJS.Timeout | null>(null)
+
+  const clearPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+    setConnecting(false)
+  }
 
   const handleVerifyData = (data: any) => {
+    if (data.error) {
+      setError(data.error)
+      clearPolling()
+      return
+    }
+
     if (data.signed) {
       const resolved = (data.nfts || []).map((n: any) => resolveBro(n))
-      
       if (resolved.length === 0) {
         setError('No Gross Bros detected in this wallet. Access denied.')
         setConnected(false)
@@ -44,14 +49,39 @@ export default function Page() {
         setConnected(true)
         setError(null)
       }
+      clearPolling()
     }
-    setConnecting(false)
+  }
+
+  const startPolling = (uuid: string) => {
+    const startTime = Date.now()
+    const TIMEOUT = 60000 // 60 seconds
+
+    pollRef.current = setInterval(async () => {
+      if (Date.now() - startTime > TIMEOUT) {
+        setError('Connection timed out. Please try again.')
+        clearPolling()
+        return
+      }
+
+      try {
+        const res = await fetch(`/api/xaman/verify?uuid=${uuid}`)
+        const data = await res.json()
+        
+        if (res.status >= 500) {
+          throw new Error(data.error || 'Internal Server Error')
+        }
+        
+        handleVerifyData(data)
+      } catch (e: any) {
+        setError(`Connection error: ${e.message}`)
+        clearPolling()
+      }
+    }, 2000)
   }
 
   useEffect(() => {
     setMounted(true)
-    if (typeof window === 'undefined') return
-
     const params = new URLSearchParams(window.location.search)
     const redirectUuid = params.get('uuid')
     const xAppToken = params.get('xAppToken') || params.get('xappToken') || params.get('ott')
@@ -62,22 +92,17 @@ export default function Page() {
       fetch(`/api/xaman/verify?xAppToken=${xAppToken}`)
         .then(res => res.json())
         .then(handleVerifyData)
-        .catch(() => setConnecting(false))
+        .catch((e) => {
+          setError(`Verification failed: ${e.message}`)
+          setConnecting(false)
+        })
     } else if (redirectUuid) {
       window.history.replaceState({}, document.title, window.location.pathname)
       setConnecting(true)
-      const poll = setInterval(async () => {
-        try {
-          const res = await fetch(`/api/xaman/verify?uuid=${redirectUuid}`)
-          const data = await res.json()
-          if (data.signed) {
-            clearInterval(poll)
-            handleVerifyData(data)
-          }
-        } catch (e) { clearInterval(poll); setConnecting(false) }
-      }, 2000)
-      return () => clearInterval(poll)
+      startPolling(redirectUuid)
     }
+
+    return () => clearPolling()
   }, [])
 
   async function handleConnect() {
@@ -95,21 +120,17 @@ export default function Page() {
       const { next, uuid, deeplink } = data
       const isXaman = /xumm|xaman/i.test(navigator.userAgent)
       
-      if (isXaman && window.xumm?.xapp?.openSignRequest) {
-        window.xumm.xapp.openSignRequest({ uuid })
+      if (isXaman && (window as any).xumm?.xapp?.openSignRequest) {
+        (window as any).xumm.xapp.openSignRequest({ uuid })
       } else {
         window.location.href = next || deeplink || `xumm://sign/${uuid}`
       }
 
-      const poll = setInterval(async () => {
-        const vRes = await fetch(`/api/xaman/verify?uuid=${uuid}`)
-        const vData = await vRes.json()
-        if (vData.signed) {
-          clearInterval(poll)
-          handleVerifyData(vData)
-        }
-      }, 2000)
-    } catch (e) { setConnecting(false) }
+      startPolling(uuid)
+    } catch (e: any) {
+      setError(e.message)
+      setConnecting(false)
+    }
   }
 
   if (!mounted) return <div className="portal-bg min-h-dvh" />
