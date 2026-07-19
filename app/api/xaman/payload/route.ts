@@ -53,8 +53,8 @@ export async function POST(request: Request) {
       uuid: data.uuid,
       next: data.next?.always,
       deeplink: data.refs?.qr_uri || `xumm://sign/${data.uuid}`,
-      qrUrl: data.refs.qr_png,
-      wsUrl: data.refs.websocket_status,
+      qrUrl: data.refs?.qr_png,
+      wsUrl: data.refs?.websocket_status,
     })
   } catch (error: any) {
     console.error('Xaman Payload Error:', error)
