@@ -40,7 +40,6 @@ async function fetchIpfsMetadata(uri: string) {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const uuid = searchParams.get('uuid')
-  // Handle casing variations for Xaman/xApp support
   const xAppToken = searchParams.get('xAppToken') || searchParams.get('xappToken') || searchParams.get('ott')
 
   if (!uuid && !xAppToken) {
@@ -75,52 +74,59 @@ export async function GET(request: Request) {
 
     if (!address) return NextResponse.json({ signed: false, status: 'expired' })
 
-    // Query balance and NFTs from XRPL Mainnet Full History Nodes
     const XRPL_NODES = [
       'https://xrplcluster.com',
       'https://s1.ripple.com:51234',
       'https://xrpl.link'
     ]
 
-    let xrplData: any = null
-    let xrplError = 'XRPL Node connection failed'
+    let accountInfo: any = null
+    let nfts: any[] = []
+    let success = false
+    let lastError = 'XRPL Node connection failed'
 
+    // Use sequential individual requests instead of batching for maximum node compatibility
     for (const node of XRPL_NODES) {
       try {
-        const xrplRes = await fetch(node, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify([
-            { method: 'account_info', params: [{ account: address, ledger_index: 'validated' }] },
-            { method: 'account_nfts', params: [{ account: address, limit: 400 }] }
-          ]),
-          signal: AbortSignal.timeout(6000)
-        })
-        
-        if (xrplRes.ok) {
-          xrplData = await xrplRes.json()
+        const [infoRes, nftRes] = await Promise.all([
+          fetch(node, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ method: 'account_info', params: [{ account: address, ledger_index: 'validated' }] }),
+            signal: AbortSignal.timeout(6000)
+          }),
+          fetch(node, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ method: 'account_nfts', params: [{ account: address, limit: 400 }] }),
+            signal: AbortSignal.timeout(6000)
+          })
+        ])
+
+        if (infoRes.ok && nftRes.ok) {
+          const infoData = await infoRes.json()
+          const nftData = await nftRes.json()
+          
+          accountInfo = infoData.result?.account_data
+          nfts = nftData.result?.account_nfts || []
+          success = true
           break
         }
       } catch (e: any) {
-        xrplError = `XRPL Error (${node}): ${e.message}`
+        lastError = `Node ${node} failed: ${e.message}`
         continue
       }
     }
-    
-    if (!xrplData) throw new Error(xrplError)
-    
-    const accountInfo = xrplData[0]?.result?.account_data
-    const nfts = xrplData[1]?.result?.account_nfts || []
+
+    if (!success) throw new Error(lastError)
 
     const xrpBalance = accountInfo ? (Number(accountInfo.Balance) / 1000000).toFixed(2) : '0.00'
 
-    // Filter for Galactic Gross Bros collection
     const collectionNfts = nfts.filter(
       (nft: any) =>
         nft.Issuer === 'rP1wMvanhfmsm7Af4FcHvSvfhash43LWSY' && nft.NFTokenTaxon === 1
     )
 
-    // Enriched Metadata resolution
     const enrichedNfts = await Promise.all(collectionNfts.map(async (nft: any) => {
       const uri = hexToUtf8(nft.URI)
       const metadata = await fetchIpfsMetadata(uri)
