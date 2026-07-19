@@ -72,7 +72,7 @@ export const GROSS_BROS_LITE: GrossBro[] = [
   },
 ]
 
-// Restore missing export for Arcade component compatibility
+// Restore GROSS_BROS alias for Arcade/Invaders compat
 export const GROSS_BROS = GROSS_BROS_LITE;
 
 export function getDeterministicStats(tokenId: string) {
