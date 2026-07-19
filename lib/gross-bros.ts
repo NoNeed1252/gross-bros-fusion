@@ -67,6 +67,19 @@ export function getDeterministicStats(tokenId: string) {
   }
 }
 
+/**
+ * Browser-safe hex to UTF8 parser (replaces Buffer for client-side compat)
+ */
+function hexToUtf8(hex: string): string {
+  if (!hex) return ''
+  try {
+    const bytes = new Uint8Array(hex.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || [])
+    return new TextDecoder().decode(bytes)
+  } catch (e) {
+    return ''
+  }
+}
+
 export function resolveBro(rawNft: any): GrossBro {
   const tokenId = parseInt(rawNft.NFTokenID.slice(-8), 16).toString()
   const cached = GROSS_BROS_LITE.find(b => b.tokenId === tokenId)
@@ -76,7 +89,7 @@ export function resolveBro(rawNft: any): GrossBro {
   let metadata: any = {}
   try {
     const hex = rawNft.URI || ''
-    const uri = Buffer.from(hex, 'hex').toString()
+    const uri = hexToUtf8(hex)
     // Simplified: check if it's IPFS
     const ipfsHash = uri.replace('ipfs://', '').replace('https://ipfs.io/ipfs/', '')
     // In a real app we'd fetch this, but for dynamic fallback we generate from traits if available

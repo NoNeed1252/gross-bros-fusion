@@ -22,9 +22,18 @@ interface WalletTabProps {
   address: string
   balance: string
   ownedBros: GrossBro[]
+  activeBroId?: string
+  onSelectBro?: (bro: GrossBro) => void
 }
 
-export function WalletTab({ connected, address, balance, ownedBros }: WalletTabProps) {
+export function WalletTab({ 
+  connected, 
+  address, 
+  balance, 
+  ownedBros,
+  activeBroId,
+  onSelectBro 
+}: WalletTabProps) {
   const formatAddress = (addr: string) => {
     if (!addr) return ''
     return `${addr.slice(0, 8)}...${addr.slice(-8)}`
@@ -84,26 +93,40 @@ export function WalletTab({ connected, address, balance, ownedBros }: WalletTabP
         {ownedBros.length > 0 ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {ownedBros.map((b) => (
-              <div
+              <button
                 key={b.tokenId}
-                className="overflow-hidden rounded-xl border border-border/70 bg-secondary/30 transition-all hover:border-primary/40"
+                onClick={() => onSelectBro?.(b)}
+                className={`overflow-hidden rounded-xl border transition-all text-left group ${
+                  activeBroId === b.tokenId 
+                    ? 'border-primary ring-1 ring-primary bg-primary/5' 
+                    : 'border-border/70 bg-secondary/30 hover:border-primary/40'
+                }`}
               >
-                <div className="relative aspect-square w-full">
+                <div className="relative aspect-square w-full overflow-hidden">
                   <Image
                     src={b.image || '/placeholder.svg'}
                     alt={b.name}
                     fill
                     sizes="(max-width: 640px) 50vw, 200px"
-                    className="object-cover"
+                    className="object-cover transition-transform duration-500 group-hover:scale-110"
                   />
+                  {activeBroId === b.tokenId && (
+                    <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
+                      <div className="bg-primary px-2 py-0.5 rounded-full font-mono text-[8px] uppercase tracking-wider text-primary-foreground">
+                        Active
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="p-2.5">
-                  <p className="truncate text-sm font-semibold text-foreground">{b.name}</p>
+                  <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                    {b.name}
+                  </p>
                   <p className="truncate font-mono text-[10px] text-muted-foreground">
                     {b.faction}
                   </p>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         ) : (

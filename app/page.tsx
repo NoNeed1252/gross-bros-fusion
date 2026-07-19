@@ -118,7 +118,17 @@ export default function Page() {
           <ChatTab connected={connected} connecting={connecting} bro={bro} onConnect={handleConnect} ownedBros={ownedBros} />
         )}
         {tab === 'wallet' && (
-          <WalletTab connected={connected} address={address} balance={xrpBalance} ownedBros={ownedBros} />
+          <WalletTab 
+            connected={connected} 
+            address={address} 
+            balance={xrpBalance} 
+            ownedBros={ownedBros} 
+            activeBroId={bro.tokenId}
+            onSelectBro={(b) => {
+              setBro(b)
+              setTab('chat')
+            }}
+          />
         )}
         {tab === 'arcade' && <ArcadeTab />}
       </main>
