@@ -1,19 +1,14 @@
 'use client'
 
-/**
- * ARCADE TAB — replaces the old Social tab.
- *
- * Hosts "Gross Invaders", a Space-Invaders style mini game where the enemies
- * are the real Galactic Gross Bros NFT faces.
- *
- * FUTURE INTEGRATION:
- * - High scores + a rebel leaderboard can be persisted per wallet in Supabase.
- */
-
 import { Gamepad2, Trophy, Keyboard } from 'lucide-react'
 import { InvadersGame } from '@/components/arcade/invaders-game'
+import type { GrossBro } from '@/lib/gross-bros'
 
-export function ArcadeTab() {
+interface ArcadeTabProps {
+  bro: GrossBro
+}
+
+export function ArcadeTab({ bro }: ArcadeTabProps) {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div className="text-center">
@@ -29,7 +24,7 @@ export function ArcadeTab() {
         </p>
       </div>
 
-      <InvadersGame />
+      <InvadersGame bro={bro} />
 
       <div className="grid grid-cols-2 gap-3">
         <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card/60 p-4">

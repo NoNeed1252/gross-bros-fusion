@@ -163,7 +163,7 @@ export default function Page() {
             }}
           />
         )}
-        {tab === 'arcade' && <ArcadeTab />}
+        {tab === 'arcade' && <ArcadeTab bro={bro} />}
       </main>
       <PortalFooter />
       <PortalBottomNav active={tab} onChange={setTab} />
