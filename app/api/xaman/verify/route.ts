@@ -75,19 +75,40 @@ export async function GET(request: Request) {
 
     if (!address) return NextResponse.json({ signed: false, status: 'expired' })
 
-    // Query balance and NFTs from XRPL
-    const xrplRes = await fetch('https://xrplcluster.com', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify([
-        { method: 'account_info', params: [{ account: address, ledger_index: 'validated' }] },
-        { method: 'account_nfts', params: [{ account: address, limit: 400 }] }
-      ]),
-    })
+    // Query balance and NFTs from XRPL Mainnet Full History Nodes
+    const XRPL_NODES = [
+      'https://xrplcluster.com',
+      'https://s1.ripple.com:51234',
+      'https://xrpl.link'
+    ]
+
+    let xrplData: any = null
+    let xrplError = 'XRPL Node connection failed'
+
+    for (const node of XRPL_NODES) {
+      try {
+        const xrplRes = await fetch(node, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify([
+            { method: 'account_info', params: [{ account: address, ledger_index: 'validated' }] },
+            { method: 'account_nfts', params: [{ account: address, limit: 400 }] }
+          ]),
+          signal: AbortSignal.timeout(6000)
+        })
+        
+        if (xrplRes.ok) {
+          xrplData = await xrplRes.json()
+          break
+        }
+      } catch (e: any) {
+        xrplError = `XRPL Error (${node}): ${e.message}`
+        continue
+      }
+    }
     
-    if (!xrplRes.ok) throw new Error('XRPL Node connection failed')
+    if (!xrplData) throw new Error(xrplError)
     
-    const xrplData = await xrplRes.json()
     const accountInfo = xrplData[0]?.result?.account_data
     const nfts = xrplData[1]?.result?.account_nfts || []
 
