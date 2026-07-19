@@ -39,7 +39,7 @@ export default function RootLayout({
       className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} bg-background`}
     >
       <body className="font-sans antialiased">
-        <Script src="https://xumm.app/assets/cdn/xumm-oauth2-pkce.min.js" strategy="beforeInteractive" />
+        <Script src="https://xumm.app/assets/cdn/xumm-xapp-sdk.min.js" strategy="beforeInteractive" />
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
