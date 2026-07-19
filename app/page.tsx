@@ -76,9 +76,13 @@ export default function Page() {
 
       const { next, uuid, deeplink } = data
 
+      const isXamanBrowser = typeof window !== 'undefined' && /xumm|xaman/i.test(navigator.userAgent)
+
       // Prioritize deeplink (custom scheme) to bypass Safari Private Browsing blocks.
       // Fallback to Universal Link (next) or hardcoded xumm:// sign protocol.
-      const redirectUrl = deeplink || next || `xumm://sign/${uuid}`
+      const redirectUrl = isXamanBrowser 
+        ? (next || deeplink || `xumm://sign/${uuid}`) 
+        : (deeplink || next || `xumm://sign/${uuid}`)
       window.location.href = redirectUrl
 
       const poll = setInterval(async () => {
