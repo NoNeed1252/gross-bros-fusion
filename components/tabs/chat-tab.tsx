@@ -38,74 +38,93 @@ export function ChatTab({
   const [typing, setTyping] = useState(false)
   const [botOn, setBotOn] = useState(false)
   const [autonomous, setAutonomous] = useState(false)
-  const replyIdx = useRef(1)
-
-  const broReply = useCallback(
-    (text: string) => {
-      setTyping(true)
-      window.setTimeout(() => {
-        setTyping(false)
-        setMessages((prev) => [...prev, { id: nextId(), role: 'bro', text }])
-      }, 900)
-    },
-    [],
-  )
 
   const handleSend = useCallback(
-    (text: string) => {
-      setMessages((prev) => [...prev, { id: nextId(), role: 'user', text }])
-      const reply = bro.demoReplies[replyIdx.current % bro.demoReplies.length]
-      replyIdx.current += 1
-      broReply(reply)
+    async (text: string) => {
+      const userMsg: ChatMessage = { id: nextId(), role: 'user', text }
+      setMessages((prev) => [...prev, userMsg])
+      setTyping(true)
+
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [...messages, userMsg].filter(m => m.role !== 'system'),
+            systemPrompt: bro.systemPrompt
+          }),
+        })
+
+        if (!response.ok) throw new Error('API Error')
+
+        const data = await response.json()
+        setMessages((prev) => [...prev, { id: nextId(), role: 'bro', text: data.text || 'Bleh... neural link failed.' }])
+      } catch (err) {
+        console.error('Chat Error:', err)
+        setMessages((prev) => [...prev, { id: nextId(), role: 'system', text: 'CONNECTION ERROR' }])
+      } finally {
+        setTyping(false)
+      }
     },
-    [bro, broReply],
+    [bro.systemPrompt, messages],
   )
 
   const handleBotAction = useCallback(
-    (action: BotAction) => {
+    async (action: BotAction) => {
       const push = (text: string) =>
         setMessages((prev) => [...prev, { id: nextId(), role: 'system', text }])
+
+      const broReply = async (prompt: string) => {
+        setTyping(true)
+        try {
+          const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [{ role: 'user', text: prompt }],
+              systemPrompt: `${bro.systemPrompt}. Provide a short, in-character reaction to this event.`
+            }),
+          })
+          if (!response.ok) throw new Error('API Error')
+          const data = await response.json()
+          setMessages((prev) => [...prev, { id: nextId(), role: 'bro', text: data.text }])
+        } catch (err) {
+          push('NEURAL LINK ERROR')
+        } finally {
+          setTyping(false)
+        }
+      }
 
       switch (action) {
         case 'toggle': {
           const next = !botOn
           setBotOn(next)
           push(next ? 'TRADE BOT ONLINE' : 'TRADE BOT OFFLINE')
-          broReply(
-            next
-              ? 'Bot is hot, holder. I am watching every candle on XRP-7 for you. 🟢'
-              : 'Bot powered down. We rest, we regroup, we ride again.',
-          )
+          await broReply(next ? 'I just turned the trade bot ON.' : 'I just turned the trade bot OFF.')
           break
         }
         case 'deposit':
           push('DEPOSIT REQUESTED')
-          broReply('Send the XRP over and I will feed it into the fusion core. Every drop counts.')
+          await broReply('I want to deposit some XRP.')
           break
         case 'withdraw':
           push('WITHDRAW REQUESTED')
-          broReply('Pulling your funds out clean — no slime residue, I promise.')
+          await broReply('I want to withdraw my XRP.')
           break
         case 'status':
           push('STATUS PING')
-          broReply(
-            `Status: bot is ${botOn ? 'ACTIVE' : 'OFFLINE'}, autonomous ${autonomous ? 'ON' : 'OFF'}. All systems gross and green.`,
-          )
+          await broReply(`Give me a status update. Bot is ${botOn ? 'active' : 'offline'}.`)
           break
         case 'autonomous': {
           const next = !autonomous
           setAutonomous(next)
           push(next ? 'AUTONOMOUS MODE ENGAGED' : 'AUTONOMOUS MODE DISENGAGED')
-          broReply(
-            next
-              ? 'Handing me the wheel? Bold. I will trade like a true XRP-7 rebel.'
-              : 'Back to manual. You call the shots, holder.',
-          )
+          await broReply(next ? 'I engaged autonomous trading mode.' : 'I disengaged autonomous trading mode.')
           break
         }
       }
     },
-    [botOn, autonomous, broReply],
+    [botOn, autonomous, bro.systemPrompt],
   )
 
   if (!connected) {
