@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
 // Explicitly using OpenRouter's 100% free tier model
-const MODEL = 'meta-llama/llama-3-8b-instruct:free'
+const MODEL = 'meta-llama/llama-3.1-8b-instruct:free'
 
 export async function POST(req: Request) {
   if (!OPENROUTER_API_KEY) {
