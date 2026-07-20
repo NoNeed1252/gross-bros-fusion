@@ -14,9 +14,9 @@ import type { GrossBro } from '@/lib/gross-bros'
 const GAME_W = 640
 const GAME_H = 560
 
-const PLAYER_W = 44
-const PLAYER_H = 44
-const PLAYER_Y = GAME_H - 70
+const PLAYER_W = 56
+const PLAYER_H = 56
+const PLAYER_Y = GAME_H - 80
 const PLAYER_SPEED_BASE = 6
 
 const BULLET_SPEED = 9
@@ -270,10 +270,10 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
         const ty = py + ph + 2 + (i * 4 + tTime % 4)
         const tOffset = Math.sin(tTime + i) * 2
         ctx.beginPath()
-        ctx.moveTo(px + pw * 0.3 + tOffset, ty)
-        ctx.lineTo(px + pw * 0.3 + tOffset, ty + 6)
-        ctx.moveTo(px + pw * 0.7 + tOffset, ty)
-        ctx.lineTo(px + pw * 0.7 + tOffset, ty + 6)
+        ctx.moveTo(px + pw * 0.35 + tOffset, ty)
+        ctx.lineTo(px + pw * 0.35 + tOffset, ty + 6)
+        ctx.moveTo(px + pw * 0.65 + tOffset, ty)
+        ctx.lineTo(px + pw * 0.65 + tOffset, ty + 6)
         ctx.stroke()
     }
 
@@ -282,54 +282,67 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       ctx.strokeStyle = POWERUP_COLORS.shield
       ctx.lineWidth = 2
       ctx.beginPath()
-      ctx.arc(px + pw/2, py + ph/2, pw * 0.9, 0, Math.PI*2)
+      ctx.arc(px + pw/2, py + ph/2, pw * 0.8, 0, Math.PI*2)
       ctx.stroke()
       ctx.fillStyle = 'rgba(0, 210, 255, 0.08)'
       ctx.fill()
     }
 
     // Gorgeous Spaceship Chassis
-    ctx.strokeStyle = s.activeSpeed > 0 ? POWERUP_COLORS.speed : NEON
+    const shipColor = s.activeSpeed > 0 ? POWERUP_COLORS.speed : NEON
+    ctx.strokeStyle = shipColor
     ctx.lineWidth = 2
     ctx.lineJoin = 'round'
     
-    // Main Body Frame
+    // 1. Wings & Body Base
     ctx.beginPath()
-    ctx.moveTo(px + pw/2, py - 6) // Nose
-    ctx.lineTo(px + pw + 10, py + ph) // Right Wing Tip
-    ctx.lineTo(px + pw * 0.8, py + ph + 4) // Right Rear
-    ctx.lineTo(px + pw * 0.2, py + ph + 4) // Left Rear
-    ctx.lineTo(px - 10, py + ph) // Left Wing Tip
+    ctx.moveTo(px + pw/2, py + 4) // Center Front
+    ctx.lineTo(px + pw + 8, py + ph - 8) // Right Wing Tip
+    ctx.lineTo(px + pw * 0.7, py + ph + 2) // Right Rear
+    ctx.lineTo(px + pw * 0.3, py + ph + 2) // Left Rear
+    ctx.lineTo(px - 8, py + ph - 8) // Left Wing Tip
     ctx.closePath()
     ctx.stroke()
 
-    // Inner detail lines (Paneling)
+    // 2. Chassis Detail Lines
     ctx.lineWidth = 1
     ctx.beginPath()
-    ctx.moveTo(px + pw * 0.15, py + ph * 0.4); ctx.lineTo(px + pw * 0.85, py + ph * 0.4)
-    ctx.moveTo(px - 4, py + ph * 0.8); ctx.lineTo(px + pw + 4, py + ph * 0.8)
+    ctx.moveTo(px + pw * 0.2, py + ph * 0.7); ctx.lineTo(px + pw * 0.8, py + ph * 0.7)
+    ctx.moveTo(px + pw * 0.5, py + ph + 2); ctx.lineTo(px + pw * 0.5, py + ph * 0.7)
     ctx.stroke()
 
-    // NFT Cockpit Core
+    // 3. Compact Pilot Cockpit (Seamless Integration)
+    const cockpitSize = 26
+    const cx = px + (pw - cockpitSize) / 2
+    const cy = py + 6
+    
     const pimg = playerImgRef.current
     if (pimg && pimg.complete && pimg.naturalWidth > 0) {
-      ctx.beginPath()
-      ctx.roundRect(px, py, pw, ph, 10)
-      ctx.clip()
-      ctx.drawImage(pimg, px, py, pw, ph)
-      
-      // Glass canopy effect
-      ctx.restore()
       ctx.save()
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'
+      ctx.beginPath()
+      ctx.arc(cx + cockpitSize/2, cy + cockpitSize/2, cockpitSize/2, 0, Math.PI * 2)
+      ctx.clip()
+      ctx.drawImage(pimg, cx, cy, cockpitSize, cockpitSize)
+      ctx.restore()
+      
+      // Pilot Canopy Frame
+      ctx.strokeStyle = shipColor
       ctx.lineWidth = 1.5
       ctx.beginPath()
-      ctx.moveTo(px + 4, py + 8)
-      ctx.lineTo(px + pw - 4, py + 8)
+      ctx.arc(cx + cockpitSize/2, cy + cockpitSize/2, cockpitSize/2, 0, Math.PI * 2)
+      ctx.stroke()
+
+      // Glass shine highlight
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.arc(cx + cockpitSize/2, cy + cockpitSize/2, cockpitSize/2 - 2, -Math.PI * 0.7, -Math.PI * 0.3)
       ctx.stroke()
     } else {
-      ctx.fillStyle = NEON
-      ctx.fillRect(px, py, pw, ph)
+      ctx.fillStyle = shipColor
+      ctx.beginPath()
+      ctx.arc(cx + cockpitSize/2, cy + cockpitSize/2, cockpitSize/2, 0, Math.PI * 2)
+      ctx.fill()
     }
     ctx.restore()
 
@@ -513,7 +526,9 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       const k = e.key.toLowerCase()
       if (['arrowleft', 'a'].includes(k)) keysRef.current.delete('left')
       if (['arrowright', 'd'].includes(k)) keysRef.current.delete('right')
-      if ([' ', 'arrowup', 'w'].includes(k)) keysRef.current.delete('fire')
+      if ([' ', 'arrowup', 'w'].includes(k)) {
+        keysRef.current.delete('fire')
+      }
     }
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)
