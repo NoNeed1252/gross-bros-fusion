@@ -4,7 +4,7 @@
  * GROSS INVADERS — ARCADE UPGRADE
  *
  * 1. Power-ups: Shields, Double Shots, Speed Boosts.
- * 2. Player Ship: Render active Gross Bro NFT face.
+ * 2. Player Ship: Render active Gross Bro NFT face inside a futuristic neon chassis.
  * 3. Enemies: Retro spaceship/bug sprites.
  */
 
@@ -257,29 +257,79 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
     }
 
     // Player
+    const px = s.playerX
+    const py = PLAYER_Y
+    const pw = PLAYER_W
+    const ph = PLAYER_H
+
+    // Animated Thrusters
+    const tTime = Date.now() / 50
+    ctx.strokeStyle = s.activeSpeed > 0 ? POWERUP_COLORS.speed : NEON
+    ctx.lineWidth = 1.5
+    for (let i = 0; i < 3; i++) {
+        const ty = py + ph + 2 + (i * 4 + tTime % 4)
+        const tOffset = Math.sin(tTime + i) * 2
+        ctx.beginPath()
+        ctx.moveTo(px + pw * 0.3 + tOffset, ty)
+        ctx.lineTo(px + pw * 0.3 + tOffset, ty + 6)
+        ctx.moveTo(px + pw * 0.7 + tOffset, ty)
+        ctx.lineTo(px + pw * 0.7 + tOffset, ty + 6)
+        ctx.stroke()
+    }
+
     ctx.save()
     if (s.activeShield > 0) {
       ctx.strokeStyle = POWERUP_COLORS.shield
-      ctx.lineWidth = 3
+      ctx.lineWidth = 2
       ctx.beginPath()
-      ctx.arc(s.playerX + PLAYER_W/2, PLAYER_Y + PLAYER_H/2, PLAYER_W * 0.8, 0, Math.PI*2)
+      ctx.arc(px + pw/2, py + ph/2, pw * 0.9, 0, Math.PI*2)
       ctx.stroke()
-      ctx.fillStyle = 'rgba(0, 210, 255, 0.1)'
+      ctx.fillStyle = 'rgba(0, 210, 255, 0.08)'
       ctx.fill()
     }
 
+    // Gorgeous Spaceship Chassis
+    ctx.strokeStyle = s.activeSpeed > 0 ? POWERUP_COLORS.speed : NEON
+    ctx.lineWidth = 2
+    ctx.lineJoin = 'round'
+    
+    // Main Body Frame
+    ctx.beginPath()
+    ctx.moveTo(px + pw/2, py - 6) // Nose
+    ctx.lineTo(px + pw + 10, py + ph) // Right Wing Tip
+    ctx.lineTo(px + pw * 0.8, py + ph + 4) // Right Rear
+    ctx.lineTo(px + pw * 0.2, py + ph + 4) // Left Rear
+    ctx.lineTo(px - 10, py + ph) // Left Wing Tip
+    ctx.closePath()
+    ctx.stroke()
+
+    // Inner detail lines (Paneling)
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(px + pw * 0.15, py + ph * 0.4); ctx.lineTo(px + pw * 0.85, py + ph * 0.4)
+    ctx.moveTo(px - 4, py + ph * 0.8); ctx.lineTo(px + pw + 4, py + ph * 0.8)
+    ctx.stroke()
+
+    // NFT Cockpit Core
     const pimg = playerImgRef.current
     if (pimg && pimg.complete && pimg.naturalWidth > 0) {
       ctx.beginPath()
-      ctx.roundRect(s.playerX, PLAYER_Y, PLAYER_W, PLAYER_H, 8)
+      ctx.roundRect(px, py, pw, ph, 10)
       ctx.clip()
-      ctx.drawImage(pimg, s.playerX, PLAYER_Y, PLAYER_W, PLAYER_H)
-      ctx.strokeStyle = s.activeSpeed > 0 ? POWERUP_COLORS.speed : NEON
-      ctx.lineWidth = 2
-      ctx.strokeRect(s.playerX, PLAYER_Y, PLAYER_W, PLAYER_H)
+      ctx.drawImage(pimg, px, py, pw, ph)
+      
+      // Glass canopy effect
+      ctx.restore()
+      ctx.save()
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.moveTo(px + 4, py + 8)
+      ctx.lineTo(px + pw - 4, py + 8)
+      ctx.stroke()
     } else {
       ctx.fillStyle = NEON
-      ctx.fillRect(s.playerX, PLAYER_Y, PLAYER_W, PLAYER_H)
+      ctx.fillRect(px, py, pw, ph)
     }
     ctx.restore()
 
