@@ -3,8 +3,8 @@ import { NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
-// Explicitly using OpenRouter's 100% free tier model
-const MODEL = 'meta-llama/llama-3.1-8b-instruct:free'
+// Fallback model if none is provided by client
+const DEFAULT_MODEL = 'meta-llama/llama-3.1-8b-instruct:free'
 
 export async function POST(req: Request) {
   if (!OPENROUTER_API_KEY) {
@@ -12,11 +12,14 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { messages, systemPrompt } = await req.json()
+    const { messages, systemPrompt, model } = await req.json()
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'Invalid messages' }, { status: 400 })
     }
+
+    // Flexibility: use model from client request, or default to a known free tier
+    const selectedModel = model || DEFAULT_MODEL
 
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -27,7 +30,7 @@ export async function POST(req: Request) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: MODEL,
+        model: selectedModel,
         messages: [
           { role: 'system', content: systemPrompt || 'You are a gross alien rebel survivor.' },
           ...messages.map((m: any) => ({
