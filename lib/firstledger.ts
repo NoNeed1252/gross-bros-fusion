@@ -46,38 +46,42 @@ export async function getXrpPrice(): Promise<TokenPrice | null> {
 
 /**
  * Searches for a specific token by ticker (e.g. "ATM") or currency code.
- * Returns the best match from the XRPL token directory.
+ * Uses a prioritized volume search to bypass rate-limited search parameters.
  */
 export async function searchFirstLedgerToken(query: string): Promise<TokenPrice | null> {
   try {
     const cleanQuery = query.replace('$', '').trim();
     if (!cleanQuery) return null;
 
-    const searchUrl = `https://api.xrpl.to/v1/tokens?search=${encodeURIComponent(cleanQuery)}`;
+    // Use a high-volume sort instead of the unreliable ?search param which is heavily rate-limited
+    const searchUrl = `https://api.xrpl.to/v1/tokens?sort=vol24h&limit=100`;
     const response = await fetch(searchUrl, {
       headers: {
         'Accept': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       },
-      next: { revalidate: 300 } // Cache searches for 5 minutes
+      next: { revalidate: 300 }
     });
 
-    if (!response.ok) throw new Error(`Search failed: ${response.status}`);
-    const data = await response.json();
+    if (!response.ok) {
+        if (response.status === 429) {
+            console.warn("XRPL.to Rate Limited. Throttling...");
+        }
+        throw new Error(`Search failed: ${response.status}`);
+    }
 
+    const data = await response.json();
     if (!data.success || !data.tokens || data.tokens.length === 0) return null;
 
-    // Matching logic:
-    // 1. Strict case-insensitive ticker match (currency)
-    // 2. Soft match (currency starts with or contains query)
-    // 3. Name match
-    // 4. Default to top result
     const normalizedQuery = cleanQuery.toUpperCase();
     
-    const match = data.tokens.find((t: any) => t.currency?.toUpperCase() === normalizedQuery)
-      || data.tokens.find((t: any) => t.currency?.toUpperCase().includes(normalizedQuery))
-      || data.tokens.find((t: any) => t.name?.toUpperCase().includes(normalizedQuery))
-      || data.tokens[0];
+    // Find matching ticker in the high-volume list
+    const match = data.tokens.find((t: any) => 
+        t.currency?.toUpperCase() === normalizedQuery || 
+        t.name?.toUpperCase().includes(normalizedQuery)
+    );
+
+    if (!match) return null;
 
     return {
       ticker: match.currency,
@@ -95,7 +99,6 @@ export async function searchFirstLedgerToken(query: string): Promise<TokenPrice 
 
 /**
  * Generates a market briefing string for the AI system prompt.
- * Note: Citations moved to the end of the prompt in route.ts to prevent AI truncation.
  */
 export async function getMarketBriefing(): Promise<string> {
   const xrp = await getXrpPrice();
