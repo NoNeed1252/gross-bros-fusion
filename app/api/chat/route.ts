@@ -3,10 +3,15 @@ import { NextResponse } from 'next/server';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { messages, model } = body;
+    const { messages, model, systemPrompt } = body;
     const selectedModel = model || 'meta-llama/llama-3.1-8b-instruct';
 
     console.log("Attempting OpenRouter fetch for model:", selectedModel);
+
+    // Inject system prompt if provided
+    const finalMessages = systemPrompt 
+      ? [{ role: 'system', content: systemPrompt }, ...messages]
+      : messages;
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -18,7 +23,7 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model: selectedModel,
-        messages: messages,
+        messages: finalMessages,
       }),
     });
 
