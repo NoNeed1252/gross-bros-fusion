@@ -95,6 +95,7 @@ export async function searchFirstLedgerToken(query: string): Promise<TokenPrice 
 
 /**
  * Generates a market briefing string for the AI system prompt.
+ * Note: Citations moved to the end of the prompt in route.ts to prevent AI truncation.
  */
 export async function getMarketBriefing(): Promise<string> {
   const xrp = await getXrpPrice();
@@ -103,5 +104,5 @@ export async function getMarketBriefing(): Promise<string> {
   const trend = xrp.dayChangePercent >= 0 ? "BULLISH" : "BEARISH";
   const emoji = xrp.dayChangePercent >= 0 ? "🚀" : "📉";
 
-  return `Current Market Status: XRP is trading at $${xrp.price.toFixed(4)} (${xrp.dayChangePercent.toFixed(2)}% 24h). Market sentiment is ${trend} ${emoji}. Source: FirstLedger Telemetry.`;
+  return `XRP Market Status: Price is $${xrp.price.toFixed(4)} (${xrp.dayChangePercent.toFixed(2)}% 24h). Sentiment is ${trend} ${emoji}.`;
 }
