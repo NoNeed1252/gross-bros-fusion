@@ -8,8 +8,9 @@ export async function POST(req: Request) {
     const selectedModel = model || 'meta-llama/llama-3.1-8b-instruct';
 
     // Extract ticker from the last user message
+    // Matches $TICKER or standalone uppercase 3-10 char tickers
     const lastMessage = messages[messages.length - 1]?.content || '';
-    const tickerMatch = lastMessage.match(/\$([A-Z0-9]{1,10})/i) || lastMessage.match(/\b([A-Z0-9]{3,6})\b/i);
+    const tickerMatch = lastMessage.match(/\$([A-Za-z0-9_-]{1,20})/i) || lastMessage.match(/\b([A-Z0-9]{3,10})\b/);
     const queryTicker = tickerMatch ? tickerMatch[1] : null;
 
     const timeout = (ms: number) => new Promise<null>((resolve) => setTimeout(() => resolve(null), ms));
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
     let activeMarketData = marketBriefing || "Market data currently unavailable.";
     
     if (tokenData) {
-      activeMarketData += `\n\nSpecific Asset Data for $${tokenData.ticker}: Price: $${tokenData.price.toFixed(6)}, 24h Change: ${tokenData.dayChangePercent.toFixed(2)}%, Volume (24h): ${tokenData.volume24h?.toLocaleString() || 'N/A'}.`;
+      activeMarketData += `\n\nSpecific Asset Data for $${tokenData.ticker}: Price: $${tokenData.price.toFixed(8)}, 24h Change: ${tokenData.dayChangePercent.toFixed(2)}%, Volume (24h): ${tokenData.volume24h?.toLocaleString() || 'N/A'}. Issuer: ${tokenData.issuer || 'Native'}.`;
     }
 
     const finalSystemPrompt = "You are a helpful assistant reporting XRP price and market data. Provide factual, precise numbers first. Be brief, normal, and professional. Speak like a normal person. No crypto-slang, no 'degenerate' personality, no roleplay.\n\n" + activeMarketData;
