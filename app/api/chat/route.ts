@@ -11,7 +11,7 @@ export async function POST(req: Request) {
 
     console.log("Attempting OpenRouter fetch for model:", selectedModel);
 
-    // Run external lookups in parallel with a timeout to prevent blocking the entire chat
+    // Run external lookups in parallel with individual catch blocks to prevent Promise.all rejection
     const timeout = (ms: number) => new Promise<null>((resolve) => setTimeout(() => resolve(null), ms));
 
     const [personalityResult, marketData] = await Promise.all([
@@ -21,23 +21,32 @@ export async function POST(req: Request) {
               .from('bro_personalities')
               .select('system_prompt')
               .eq('species', species)
-              .single(),
-            timeout(2000) // 2s timeout for Supabase
+              .single()
+              .catch(e => {
+                console.error("Supabase Query/Init Error:", e);
+                return null;
+              }),
+            timeout(2000)
           ])
         : Promise.resolve(null),
       Promise.race([
-        getMarketBriefing(),
-        timeout(2000) // 2s timeout for Price API
+        getMarketBriefing().catch(e => {
+          console.error("Market Data Fetch Error:", e);
+          return null;
+        }),
+        timeout(2000)
       ])
     ]);
 
     // Dynamic Personality Resolution logic
     let activeSystemPrompt = systemPrompt;
+    
+    // personalityResult might be null if timed out or errored
     if (personalityResult && 'data' in personalityResult && personalityResult.data) {
       activeSystemPrompt = personalityResult.data.system_prompt;
       console.log(`Resolved personality for ${species} from Supabase`);
     } else if (species) {
-      // Fallback to hardcoded traits if Supabase timed out or missing key
+      // Fallback to hardcoded traits if Supabase timed out, errored, or missing key
       const fallback = (PERSONALITY_TRAITS as any)[species];
       if (fallback) {
         activeSystemPrompt = fallback.prompt;
@@ -45,7 +54,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // Inject market data (use fallback string if timed out)
+    // Inject market data (use fallback string if timed out or errored)
     const activeMarketData = marketData || "Market data currently unavailable (neural link lag).";
 
     const finalSystemPrompt = activeSystemPrompt 
