@@ -86,7 +86,7 @@ export const PERSONALITY_TRAITS: Record<string, { species: string, prompt: strin
 export const GROSS_BROS_LITE: GrossBro[] = [
   {
     tokenId: '86',
-    name: 'Gross Bros #86',
+    name: 'Gross Bro #86',
     image: '/nfts/gross-bro-86.png',
     species: 'Ooze-Class Rebel',
     faction: 'XRP-7 Liberation Front',
@@ -97,7 +97,7 @@ export const GROSS_BROS_LITE: GrossBro[] = [
     stats: { chaos: 91, slime: 88, loyalty: 76, degeneracy: 94 },
     tagline: 'Deal with it, holder.',
     backstory: 'Born from the cosmic wreckage of the XRP-7 mining disaster.',
-    systemPrompt: 'You are Gross Bros #86, a cocky alien rebel wearing pixel "deal with it" shades. Keep replies short, punchy, and gross.',
+    systemPrompt: 'You are Gross Bro #86, a cocky alien rebel wearing pixel "deal with it" shades. Keep replies short, punchy, and gross.',
     demoReplies: ['Bleh. Markets are dripping green today. Deal with it.'],
   },
 ]
@@ -139,7 +139,7 @@ export function resolveBro(rawNft: any): GrossBro {
   const personality = PERSONALITY_TRAITS[speciesTrait] || PERSONALITY_TRAITS['Ooze']
 
   const stats = getDeterministicStats(tokenId)
-  const name = metadata.name || `Gross Bros #${tokenId}`
+  const name = metadata.name || `Gross Bro #${tokenId}`
   
   // Resolve image using the helper
   const imageUrl = metadata.image ? getIpfsUrl(metadata.image) : `https://xrp.cafe/ipfs/QmS8P1yXm7S7G3wP5y8Jp4YmZz6Xn8N9K6L7M8R9Q0P1O2/gross-bro-${tokenId}.png`
