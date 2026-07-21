@@ -29,7 +29,8 @@ export async function POST(req: Request) {
     }
 
     const data = await response.json();
-    return NextResponse.json(data);
+    const text = data.choices?.[0]?.message?.content || "Bleh... neural link failed.";
+    return NextResponse.json({ text });
 
   } catch (error) {
     console.error("Runtime fetch error:", error);
