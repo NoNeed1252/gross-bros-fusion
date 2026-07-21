@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { PERSONALITY_TRAITS } from '@/lib/gross-bros';
+import { getMarketBriefing } from '@/lib/firstledger';
 
 export async function POST(req: Request) {
   try {
@@ -37,10 +38,18 @@ export async function POST(req: Request) {
       }
     }
 
-    // Inject system prompt if resolved or provided
-    const finalMessages = activeSystemPrompt 
-      ? [{ role: 'system', content: activeSystemPrompt }, ...messages]
-      : messages;
+    // Fetch real-time market data
+    const marketData = await getMarketBriefing();
+
+    // Inject market data and system prompt
+    const finalSystemPrompt = activeSystemPrompt 
+      ? `${activeSystemPrompt}\n\n${marketData}`
+      : marketData;
+
+    const finalMessages = [
+      { role: 'system', content: finalSystemPrompt },
+      ...messages
+    ];
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
