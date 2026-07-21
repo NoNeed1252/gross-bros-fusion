@@ -1,7 +1,8 @@
 /**
- * Market Price Oracle
+ * FirstLedger Market Oracle
  * 
- * Fetches real-time pricing data for XRP directly from the XRPL API.
+ * Logic for fetching prices and looking up specific FirstLedger assets (XRP, $ATM, etc.)
+ * directly from the XRPL ecosystem telemetry.
  */
 
 export interface TokenPrice {
@@ -9,10 +10,12 @@ export interface TokenPrice {
   price: number;
   dayChangePercent: number;
   timestamp: string;
+  issuer?: string;
+  volume24h?: number;
 }
 
 /**
- * Fetches the current price of XRP in USD from the XRPL.to API.
+ * Fetches the current price of XRP in USD.
  */
 export async function getXrpPrice(): Promise<TokenPrice | null> {
   try {
@@ -24,15 +27,10 @@ export async function getXrpPrice(): Promise<TokenPrice | null> {
       next: { revalidate: 60 }
     });
     
-    if (!response.ok) {
-      throw new Error(`XRPL.to API responded with status: ${response.status}`);
-    }
-
+    if (!response.ok) throw new Error(`XRPL.to API status: ${response.status}`);
     const data = await response.json();
     
-    if (!data.success || !data.token || typeof data.token.usd !== 'string') {
-      throw new Error('Invalid response structure from XRPL.to API');
-    }
+    if (!data.success || !data.token) throw new Error('Invalid XRPL.to response');
 
     return {
       ticker: 'XRP',
@@ -41,7 +39,48 @@ export async function getXrpPrice(): Promise<TokenPrice | null> {
       timestamp: new Date().toISOString()
     };
   } catch (error) {
-    console.error('Failed to fetch XRP price from XRPL.to:', error);
+    console.error('Failed to fetch XRP price:', error);
+    return null;
+  }
+}
+
+/**
+ * Searches for a specific token by ticker (e.g. "ATM") or currency code.
+ * Returns the best match from the XRPL token directory.
+ */
+export async function searchFirstLedgerToken(query: string): Promise<TokenPrice | null> {
+  try {
+    const searchUrl = `https://api.xrpl.to/v1/tokens?search=${encodeURIComponent(query)}`;
+    const response = await fetch(searchUrl, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      next: { revalidate: 300 } // Cache searches for 5 minutes
+    });
+
+    if (!response.ok) throw new Error(`Search failed: ${response.status}`);
+    const data = await response.json();
+
+    if (!data.success || !data.tokens || data.tokens.length === 0) return null;
+
+    // Find the best match (case-insensitive ticker match)
+    const normalizedQuery = query.toUpperCase().replace('$', '');
+    const match = data.tokens.find((t: any) => 
+      t.currency.toUpperCase() === normalizedQuery || 
+      t.name.toUpperCase() === normalizedQuery
+    ) || data.tokens[0];
+
+    return {
+      ticker: match.currency,
+      price: parseFloat(match.usd),
+      dayChangePercent: match.pro24h || 0,
+      timestamp: new Date().toISOString(),
+      issuer: match.issuer,
+      volume24h: match.vol24h
+    };
+  } catch (error) {
+    console.error(`Failed to search token ${query}:`, error);
     return null;
   }
 }
@@ -56,5 +95,5 @@ export async function getMarketBriefing(): Promise<string> {
   const trend = xrp.dayChangePercent >= 0 ? "BULLISH" : "BEARISH";
   const emoji = xrp.dayChangePercent >= 0 ? "🚀" : "📉";
 
-  return `Current Market Status: XRP is trading at $${xrp.price.toFixed(4)} (${xrp.dayChangePercent.toFixed(2)}% 24h). Market sentiment is ${trend} ${emoji}. Source: XRPL Telemetry.`;
+  return `Current Market Status: XRP is trading at $${xrp.price.toFixed(4)} (${xrp.dayChangePercent.toFixed(2)}% 24h). Market sentiment is ${trend} ${emoji}. Source: FirstLedger Telemetry.`;
 }
