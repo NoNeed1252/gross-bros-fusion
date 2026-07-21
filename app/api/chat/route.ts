@@ -11,7 +11,7 @@ export async function POST(req: Request) {
 
     const marketData = await Promise.race([
       getMarketBriefing().catch(() => null),
-      timeout(2000)
+      timeout(5000)
     ]);
 
     const activeMarketData = marketData || "Market data currently unavailable.";
