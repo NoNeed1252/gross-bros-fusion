@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-import { PERSONALITY_TRAITS } from '@/lib/gross-bros';
 import { getMarketBriefing } from '@/lib/firstledger';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { messages, model, systemPrompt, species } = body;
+    const { messages, model } = body;
     const selectedModel = model || 'meta-llama/llama-3.1-8b-instruct';
 
     console.log("Attempting OpenRouter fetch for model:", selectedModel);
@@ -14,69 +12,23 @@ export async function POST(req: Request) {
     // Timeout helper
     const timeout = (ms: number) => new Promise<null>((resolve) => setTimeout(() => resolve(null), ms));
 
-    /**
-     * Safely fetch personality from Supabase.
-     * Wraps the synchronous Proxy property access in a try-catch to prevent crashes.
-     */
-    const getSafePersonality = async (speciesKey: string) => {
-      try {
-        const query = supabase.from('bro_personalities');
-        
-        return await query
-          .select('system_prompt')
-          .eq('species', speciesKey)
-          .single();
-      } catch (e) {
-        console.error("Supabase Initialization/Query Failure (Graceful Fallback):", e);
+    // Fetch market data
+    const marketData = await Promise.race([
+      getMarketBriefing().catch(e => {
+        console.error("Market Data Fetch Error:", e);
         return null;
-      }
-    };
-
-    // Run external lookups in parallel
-    const [personalityResult, marketData] = await Promise.all([
-      species ? Promise.race([getSafePersonality(species), timeout(2000)]) : Promise.resolve(null),
-      Promise.race([
-        getMarketBriefing().catch(e => {
-          console.error("Market Data Fetch Error:", e);
-          return null;
-        }),
-        timeout(2000)
-      ])
+      }),
+      2000
     ]);
 
-    // --- Dynamic Personality Resolution & Merging Logic ---
-    
-    // We start with the 'systemPrompt' from the frontend, which contains 
-    // the NFT-specific immersive details (name, traits, stats).
-    let mergedPrompt = systemPrompt;
-    
-    if (personalityResult && 'data' in personalityResult && personalityResult.data?.system_prompt) {
-      // Merge: Base traits from Supabase + NFT-specific context
-      mergedPrompt = `${personalityResult.data.system_prompt}\n\nNFT Context: ${systemPrompt}`;
-      console.log(`Merged personality for ${species} from Supabase`);
-    } else if (species) {
-      // Fallback: Hardcoded traits + NFT-specific context
-      const fallback = (PERSONALITY_TRAITS as any)[species];
-      if (fallback) {
-        mergedPrompt = `${fallback.prompt}\n\nNFT Context: ${systemPrompt}`;
-        console.log(`Merged hardcoded fallback for species ${species}`);
-      }
-    }
-
-    // Inject market data (use fallback string if timed out or errored)
-    const activeMarketData = marketData || "Market data currently unavailable (neural link lag).";
+    const activeMarketData = marketData || "Market data currently unavailable.";
 
     /**
-     * PRIORITY INSTRUCTIONS: 
-     * Explicitly order instructions to prioritize data over persona.
+     * SYSTEM PROMPT OVERRIDE: 
+     * Removed all personality, species traits, and crypto-slang.
      */
-    const priorityInstructions = "PRIORITY: If asked for market data or XRP pricing, provide factual, precise numbers first, then personality flare. Brevity is absolute.";
-    const brevityConstraint = "CRITICAL: Keep responses to 1-2 short sentences max. Tactical, punchy, no paragraphs.";
-
-    // Order: Instructions -> Market Data -> Persona Context
-    const finalSystemPrompt = `${priorityInstructions}\n\n${activeMarketData}\n\n${mergedPrompt}\n\n${brevityConstraint}`;
+    const finalSystemPrompt = `You are a helpful assistant reporting XRP price and market data. Provide factual, precise numbers first. Be brief, normal, and professional. Speak like a normal person. No crypto-slang, no 'degenerate' personality, no roleplay.\n\n${activeMarketData}`;
     
-    // Log final system prompt for verification
     console.log("FINAL_SYSTEM_PROMPT_START");
     console.log(finalSystemPrompt);
     console.log("FINAL_SYSTEM_PROMPT_END");
@@ -107,7 +59,7 @@ export async function POST(req: Request) {
     }
 
     const data = await response.json();
-    const text = data.choices?.[0]?.message?.content || "Bleh... neural link failed.";
+    const text = data.choices?.[0]?.message?.content || "Connection failed.";
     return NextResponse.json({ text });
 
   } catch (error) {
