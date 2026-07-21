@@ -20,8 +20,6 @@ export async function POST(req: Request) {
      */
     const getSafePersonality = async (speciesKey: string) => {
       try {
-        // This line triggers the Proxy's 'get' trap synchronously. 
-        // If NEXT_PUBLIC_SUPABASE_URL is missing, it throws immediately.
         const query = supabase.from('bro_personalities');
         
         return await query
@@ -46,27 +44,32 @@ export async function POST(req: Request) {
       ])
     ]);
 
-    // Dynamic Personality Resolution logic
-    let activeSystemPrompt = systemPrompt;
+    // --- Dynamic Personality Resolution & Merging Logic ---
     
-    if (personalityResult && 'data' in personalityResult && personalityResult.data) {
-      activeSystemPrompt = personalityResult.data.system_prompt;
-      console.log(`Resolved personality for ${species} from Supabase`);
+    // We start with the 'systemPrompt' from the frontend, which contains 
+    // the NFT-specific immersive details (name, traits, stats).
+    let mergedPrompt = systemPrompt;
+    
+    if (personalityResult && 'data' in personalityResult && personalityResult.data?.system_prompt) {
+      // Merge: Base traits from Supabase + NFT-specific context
+      mergedPrompt = `${personalityResult.data.system_prompt}\n\nNFT Context: ${systemPrompt}`;
+      console.log(`Merged personality for ${species} from Supabase`);
     } else if (species) {
-      // Fallback to hardcoded traits if Supabase timed out, errored, or missing config
+      // Fallback: Hardcoded traits + NFT-specific context
       const fallback = (PERSONALITY_TRAITS as any)[species];
       if (fallback) {
-        activeSystemPrompt = fallback.prompt;
-        console.log(`Using hardcoded fallback for species ${species}`);
+        mergedPrompt = `${fallback.prompt}\n\nNFT Context: ${systemPrompt}`;
+        console.log(`Merged hardcoded fallback for species ${species}`);
       }
     }
 
     // Inject market data (use fallback string if timed out or errored)
     const activeMarketData = marketData || "Market data currently unavailable (neural link lag).";
 
-    const finalSystemPrompt = activeSystemPrompt 
-      ? `${activeSystemPrompt}\n\n${activeMarketData}`
-      : activeMarketData;
+    // Strict Brevity Constraint
+    const brevityConstraint = "CRITICAL: Keep responses to 1-2 short sentences max. Tactical, punchy, no paragraphs.";
+
+    const finalSystemPrompt = `${mergedPrompt}\n\n${activeMarketData}\n\n${brevityConstraint}`;
 
     const finalMessages = [
       { role: 'system', content: finalSystemPrompt },
