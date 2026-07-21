@@ -70,6 +70,11 @@ export async function POST(req: Request) {
     const brevityConstraint = "CRITICAL: Keep responses to 1-2 short sentences max. Tactical, punchy, no paragraphs.";
 
     const finalSystemPrompt = `${mergedPrompt}\n\n${activeMarketData}\n\n${brevityConstraint}`;
+    
+    // Log final system prompt for verification
+    console.log("FINAL_SYSTEM_PROMPT_START");
+    console.log(finalSystemPrompt);
+    console.log("FINAL_SYSTEM_PROMPT_END");
 
     const finalMessages = [
       { role: 'system', content: finalSystemPrompt },
