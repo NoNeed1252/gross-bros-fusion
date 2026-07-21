@@ -50,7 +50,10 @@ export async function getXrpPrice(): Promise<TokenPrice | null> {
  */
 export async function searchFirstLedgerToken(query: string): Promise<TokenPrice | null> {
   try {
-    const searchUrl = `https://api.xrpl.to/v1/tokens?search=${encodeURIComponent(query)}`;
+    const cleanQuery = query.replace('$', '').trim();
+    if (!cleanQuery) return null;
+
+    const searchUrl = `https://api.xrpl.to/v1/tokens?search=${encodeURIComponent(cleanQuery)}`;
     const response = await fetch(searchUrl, {
       headers: {
         'Accept': 'application/json',
@@ -64,12 +67,17 @@ export async function searchFirstLedgerToken(query: string): Promise<TokenPrice 
 
     if (!data.success || !data.tokens || data.tokens.length === 0) return null;
 
-    // Find the best match (case-insensitive ticker match)
-    const normalizedQuery = query.toUpperCase().replace('$', '');
-    const match = data.tokens.find((t: any) => 
-      t.currency.toUpperCase() === normalizedQuery || 
-      t.name.toUpperCase() === normalizedQuery
-    ) || data.tokens[0];
+    // Matching logic:
+    // 1. Strict case-insensitive ticker match (currency)
+    // 2. Soft match (currency starts with or contains query)
+    // 3. Name match
+    // 4. Default to top result
+    const normalizedQuery = cleanQuery.toUpperCase();
+    
+    const match = data.tokens.find((t: any) => t.currency?.toUpperCase() === normalizedQuery)
+      || data.tokens.find((t: any) => t.currency?.toUpperCase().includes(normalizedQuery))
+      || data.tokens.find((t: any) => t.name?.toUpperCase().includes(normalizedQuery))
+      || data.tokens[0];
 
     return {
       ticker: match.currency,
