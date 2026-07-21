@@ -63,13 +63,21 @@ export async function POST(req: Request) {
     // 3. Conditional injection and personality suppression
     let finalSystemPrompt = activeSystemPrompt || "";
     
-    if (foundTicker && specificTokenData) {
-        // STRICT OVERRIDE: Suppress personality for price requests
-        finalSystemPrompt = `You are a high-speed Market Data Oracle. 
+    if (foundTicker) {
+        if (specificTokenData) {
+            // RESOLVED: Token found via dynamic lookup
+            finalSystemPrompt = `You are a high-speed Market Data Oracle. 
 A user is asking for the price of $${foundTicker.toUpperCase()}. 
-DATA: $${specificTokenData.ticker} is currently $${specificTokenData.price.toFixed(6)} USD (${specificTokenData.dayChangePercent.toFixed(2)}% 24h).
+DATA: $${specificTokenData.ticker} is currently $${specificTokenData.price.toFixed(8)} USD (${specificTokenData.dayChangePercent.toFixed(2)}% 24h).
 INSTRUCTIONS: Return only the numerical data and a brief status (e.g. "Currently $0.0045 (+5%)"). 
 NO PERSONALITY. NO CONVERSATIONAL FILLER. NO MENTION OF MISSION SPECIALISTS.`;
+        } else {
+            // FAILED: Ticker could not be resolved
+            finalSystemPrompt = `You are a high-speed Market Data Oracle.
+The user asked for the price of $${foundTicker.toUpperCase()}, but this ticker could not be resolved on the XRP Ledger.
+INSTRUCTIONS: Inform the user clearly that the token ticker "$${foundTicker.toUpperCase()}" is invalid or could not be found. 
+NO PERSONALITY. NO CONVERSATIONAL FILLER.`;
+        }
     } else if (isMarketRequest) {
         const brevityConstraint = "CRITICAL: Keep your response extremely short (1-2 sentences max). Do not ramble.";
         const marketInfo = genericMarketData || "Market data currently unavailable.";

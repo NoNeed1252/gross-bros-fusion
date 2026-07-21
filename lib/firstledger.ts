@@ -25,15 +25,6 @@ export interface NFTCollection {
 }
 
 /**
- * Hardcoded currency_issuer identifiers for major ecosystem tokens.
- */
-const TOKEN_REGISTRY: Record<string, string> = {
-  'ATM': 'ATM_rn7A39R3uYx9B9U8U8U8U8U8U8U8U8U8', // Placeholder ID - used for direct resolution
-  'FUZZY': 'FUZZY_rP1wMvanhfmsm7Af4FcHvSvfhash43LWSY',
-  'ROSO': 'ROSO_rG1wMvanhfmsm7Af4FcHvSvfhash43LWSY',
-};
-
-/**
  * Fetches the current price of XRP in USD.
  */
 export async function getXrpPrice(): Promise<TokenPrice | null> {
@@ -64,7 +55,7 @@ export async function getXrpPrice(): Promise<TokenPrice | null> {
 }
 
 /**
- * Direct fallback lookup for niche tokens by currency_issuer.
+ * Direct lookup for tokens by identifier (md5 or currency_issuer).
  */
 export async function getTokenById(id: string): Promise<TokenPrice | null> {
   try {
@@ -81,7 +72,7 @@ export async function getTokenById(id: string): Promise<TokenPrice | null> {
     if (!data.success || !data.token) return null;
 
     return {
-      ticker: data.token.currency,
+      ticker: data.token.token || data.token.currency,
       price: parseFloat(data.token.usd),
       dayChangePercent: data.token.pro24h || 0,
       timestamp: new Date().toISOString(),
@@ -95,88 +86,51 @@ export async function getTokenById(id: string): Promise<TokenPrice | null> {
 }
 
 /**
- * Searches for a specific token by ticker (e.g. "ATM") or currency code.
+ * Dynamically resolves a ticker symbol to an XRPL token using the search endpoint.
+ */
+export async function resolveTickerToToken(ticker: string): Promise<TokenPrice | null> {
+    try {
+        const cleanTicker = ticker.replace('$', '').trim().toUpperCase();
+        if (!cleanTicker) return null;
+
+        // 1. Use the search endpoint to find the identifier
+        const searchResponse = await fetch('https://api.xrpl.to/v1/search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0'
+            },
+            body: JSON.stringify({ search: cleanTicker, limit: 5 })
+        });
+
+        if (!searchResponse.ok) return null;
+        const searchData = await searchResponse.json();
+        
+        if (!searchData.success || !searchData.tokens || searchData.tokens.length === 0) {
+            return null;
+        }
+
+        // 2. Find the best match (exact symbol match)
+        const bestMatch = searchData.tokens.find((t: any) => 
+            (t.token || t.currency || '').toUpperCase() === cleanTicker
+        ) || searchData.tokens[0];
+
+        const identifier = bestMatch.md5 || bestMatch.slug;
+        if (!identifier) return null;
+
+        // 3. Fetch full token details using the identifier
+        return await getTokenById(identifier);
+    } catch (error) {
+        console.error(`Dynamic lookup failed for ${ticker}:`, error);
+        return null;
+    }
+}
+
+/**
+ * Searches for a specific token (legacy wrapper for resolveTickerToToken).
  */
 export async function searchFirstLedgerToken(query: string): Promise<TokenPrice | null> {
-  try {
-    const cleanQuery = query.replace('$', '').trim();
-    if (!cleanQuery) return null;
-
-    const normalizedQuery = cleanQuery.toUpperCase();
-
-    // 0. Check hardcoded registry for ecosystem tokens
-    if (TOKEN_REGISTRY[normalizedQuery]) {
-        const direct = await getTokenById(TOKEN_REGISTRY[normalizedQuery]);
-        if (direct) return direct;
-    }
-
-    // 1. First try a direct search if it looks like currency_issuer
-    if (cleanQuery.includes('_')) {
-        const direct = await getTokenById(cleanQuery);
-        if (direct) return direct;
-    }
-
-    // 2. Attempt fuzzy search via POST /v1/search
-    const searchResponse = await fetch('https://api.xrpl.to/v1/search', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': 'Mozilla/5.0'
-        },
-        body: JSON.stringify({ search: cleanQuery, limit: 1 })
-    });
-
-    if (searchResponse.ok) {
-        const searchData = await searchResponse.json();
-        if (searchData.success && searchData.tokens && searchData.tokens.length > 0) {
-            const match = searchData.tokens[0];
-            return {
-                ticker: match.currency,
-                price: parseFloat(match.usd),
-                dayChangePercent: match.pro24h || 0,
-                timestamp: new Date().toISOString(),
-                issuer: match.issuer,
-                volume24h: match.vol24h,
-                md5: match.md5
-            };
-        }
-    }
-
-    // 3. Fallback to volume sort scan
-    const searchUrl = `https://api.xrpl.to/v1/tokens?sort=vol24h&limit=100`;
-    const response = await fetch(searchUrl, {
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0'
-      },
-      next: { revalidate: 300 }
-    });
-
-    if (!response.ok) throw new Error(`Search failed: ${response.status}`);
-
-    const data = await response.json();
-    if (!data.success || !data.tokens || data.tokens.length === 0) return null;
-
-    const match = data.tokens.find((t: any) => 
-        t.currency?.toUpperCase() === normalizedQuery || 
-        t.name?.toUpperCase().includes(normalizedQuery)
-    );
-
-    if (!match) return null;
-
-    return {
-      ticker: match.currency,
-      price: parseFloat(match.usd),
-      dayChangePercent: match.pro24h || 0,
-      timestamp: new Date().toISOString(),
-      issuer: match.issuer,
-      volume24h: match.vol24h,
-      md5: match.md5
-    };
-  } catch (error) {
-    console.error(`Failed to search token ${query}:`, error);
-    return null;
-  }
+  return resolveTickerToToken(query);
 }
 
 /**
