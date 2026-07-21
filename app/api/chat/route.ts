@@ -11,24 +11,32 @@ export async function POST(req: Request) {
 
     console.log("Attempting OpenRouter fetch for model:", selectedModel);
 
-    // Run external lookups in parallel with individual catch blocks to prevent Promise.all rejection
+    // Timeout helper
     const timeout = (ms: number) => new Promise<null>((resolve) => setTimeout(() => resolve(null), ms));
 
+    /**
+     * Safely fetch personality from Supabase.
+     * Wraps the synchronous Proxy property access in a try-catch to prevent crashes.
+     */
+    const getSafePersonality = async (speciesKey: string) => {
+      try {
+        // This line triggers the Proxy's 'get' trap synchronously. 
+        // If NEXT_PUBLIC_SUPABASE_URL is missing, it throws immediately.
+        const query = supabase.from('bro_personalities');
+        
+        return await query
+          .select('system_prompt')
+          .eq('species', speciesKey)
+          .single();
+      } catch (e) {
+        console.error("Supabase Initialization/Query Failure (Graceful Fallback):", e);
+        return null;
+      }
+    };
+
+    // Run external lookups in parallel
     const [personalityResult, marketData] = await Promise.all([
-      species 
-        ? Promise.race([
-            supabase
-              .from('bro_personalities')
-              .select('system_prompt')
-              .eq('species', species)
-              .single()
-              .catch(e => {
-                console.error("Supabase Query/Init Error:", e);
-                return null;
-              }),
-            timeout(2000)
-          ])
-        : Promise.resolve(null),
+      species ? Promise.race([getSafePersonality(species), timeout(2000)]) : Promise.resolve(null),
       Promise.race([
         getMarketBriefing().catch(e => {
           console.error("Market Data Fetch Error:", e);
@@ -41,12 +49,11 @@ export async function POST(req: Request) {
     // Dynamic Personality Resolution logic
     let activeSystemPrompt = systemPrompt;
     
-    // personalityResult might be null if timed out or errored
     if (personalityResult && 'data' in personalityResult && personalityResult.data) {
       activeSystemPrompt = personalityResult.data.system_prompt;
       console.log(`Resolved personality for ${species} from Supabase`);
     } else if (species) {
-      // Fallback to hardcoded traits if Supabase timed out, errored, or missing key
+      // Fallback to hardcoded traits if Supabase timed out, errored, or missing config
       const fallback = (PERSONALITY_TRAITS as any)[species];
       if (fallback) {
         activeSystemPrompt = fallback.prompt;
