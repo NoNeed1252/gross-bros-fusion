@@ -1,7 +1,7 @@
 /**
- * FirstLedger Price Oracle
+ * Market Price Oracle
  * 
- * Fetches real-time pricing data for XRP directly from the FirstLedger telemetry API.
+ * Fetches real-time pricing data for XRP directly from the XRPL API.
  */
 
 export interface TokenPrice {
@@ -12,12 +12,11 @@ export interface TokenPrice {
 }
 
 /**
- * Fetches the current price of XRP in USD from the FirstLedger API.
+ * Fetches the current price of XRP in USD from the XRPL.to API.
  */
 export async function getXrpPrice(): Promise<TokenPrice | null> {
   try {
-    // Calling the FirstLedger telemetry endpoint for XRP price data
-    const response = await fetch('https://api.firstledger.net/v1/telemetry/xrp', {
+    const response = await fetch('https://api.xrpl.to/v1/token/xrp', {
       headers: {
         'Accept': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -26,20 +25,23 @@ export async function getXrpPrice(): Promise<TokenPrice | null> {
     });
     
     if (!response.ok) {
-      throw new Error(`FirstLedger API responded with status: ${response.status}`);
+      throw new Error(`XRPL.to API responded with status: ${response.status}`);
     }
 
     const data = await response.json();
     
-    // FirstLedger response format: { data: { price_usd: number, change_24h: number, ... } }
+    if (!data.success || !data.token || typeof data.token.usd !== 'string') {
+      throw new Error('Invalid response structure from XRPL.to API');
+    }
+
     return {
       ticker: 'XRP',
-      price: data.data.price_usd,
-      dayChangePercent: data.data.change_24h,
+      price: parseFloat(data.token.usd),
+      dayChangePercent: data.token.pro24h || 0,
       timestamp: new Date().toISOString()
     };
   } catch (error) {
-    console.error('Failed to fetch XRP price from FirstLedger:', error);
+    console.error('Failed to fetch XRP price from XRPL.to:', error);
     return null;
   }
 }
@@ -49,10 +51,10 @@ export async function getXrpPrice(): Promise<TokenPrice | null> {
  */
 export async function getMarketBriefing(): Promise<string> {
   const xrp = await getXrpPrice();
-  if (!xrp) return "Market data currently unavailable (FirstLedger link severed).";
+  if (!xrp) return "Market data currently unavailable (telemetry link severed).";
 
   const trend = xrp.dayChangePercent >= 0 ? "BULLISH" : "BEARISH";
   const emoji = xrp.dayChangePercent >= 0 ? "🚀" : "📉";
 
-  return `Current Market Status: XRP is trading at $${xrp.price.toFixed(4)} (${xrp.dayChangePercent.toFixed(2)}% 24h). Market sentiment is ${trend} ${emoji}. Source: FirstLedger Telemetry.`;
+  return `Current Market Status: XRP is trading at $${xrp.price.toFixed(4)} (${xrp.dayChangePercent.toFixed(2)}% 24h). Market sentiment is ${trend} ${emoji}. Source: XRPL Telemetry.`;
 }
