@@ -37,7 +37,7 @@ export async function getXrpPrice(): Promise<TokenPrice | null> {
       next: { revalidate: 60 }
     });
     
-    if (!response.ok) throw new Error(\`XRPL.to API status: \${response.status}\`);
+    if (!response.ok) throw new Error(`XRPL.to API status: ${response.status}`);
     const data = await response.json();
     
     if (!data.success || !data.token) throw new Error('Invalid XRPL.to response');
@@ -59,7 +59,7 @@ export async function getXrpPrice(): Promise<TokenPrice | null> {
  */
 export async function getTokenById(id: string): Promise<TokenPrice | null> {
   try {
-    const response = await fetch(\`https://api.xrpl.to/v1/token/\${id}\`, {
+    const response = await fetch(`https://api.xrpl.to/v1/token/${id}`, {
       headers: {
         'Accept': 'application/json',
         'User-Agent': 'Mozilla/5.0'
@@ -126,7 +126,7 @@ export async function searchFirstLedgerToken(query: string): Promise<TokenPrice 
     }
 
     // Fallback to volume sort scan
-    const searchUrl = \`https://api.xrpl.to/v1/tokens?sort=vol24h&limit=100\`;
+    const searchUrl = `https://api.xrpl.to/v1/tokens?sort=vol24h&limit=100`;
     const response = await fetch(searchUrl, {
       headers: {
         'Accept': 'application/json',
@@ -135,7 +135,7 @@ export async function searchFirstLedgerToken(query: string): Promise<TokenPrice 
       next: { revalidate: 300 }
     });
 
-    if (!response.ok) throw new Error(\`Search failed: \${response.status}\`);
+    if (!response.ok) throw new Error(`Search failed: ${response.status}`);
 
     const data = await response.json();
     if (!data.success || !data.tokens || data.tokens.length === 0) return null;
@@ -158,7 +158,7 @@ export async function searchFirstLedgerToken(query: string): Promise<TokenPrice 
       md5: match.md5
     };
   } catch (error) {
-    console.error(\`Failed to search token \${query}:\`, error);
+    console.error(`Failed to search token ${query}:`, error);
     return null;
   }
 }
@@ -207,5 +207,5 @@ export async function getMarketBriefing(): Promise<string> {
   const trend = xrp.dayChangePercent >= 0 ? "BULLISH" : "BEARISH";
   const emoji = xrp.dayChangePercent >= 0 ? "🚀" : "📉";
 
-  return \`XRP Market Status: Price is \$\${xrp.price.toFixed(4)} (\${xrp.dayChangePercent.toFixed(2)}% 24h). Sentiment is \${trend} \${emoji}.\`;
+  return `XRP Market Status: Price is $${xrp.price.toFixed(4)} (${xrp.dayChangePercent.toFixed(2)}% 24h). Sentiment is ${trend} ${emoji}.`;
 }
