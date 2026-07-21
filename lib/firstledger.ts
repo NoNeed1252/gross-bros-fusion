@@ -25,6 +25,15 @@ export interface NFTCollection {
 }
 
 /**
+ * Hardcoded currency_issuer identifiers for major ecosystem tokens.
+ */
+const TOKEN_REGISTRY: Record<string, string> = {
+  'ATM': 'ATM_rn7A39R3uYx9B9U8U8U8U8U8U8U8U8U8', // Placeholder ID - used for direct resolution
+  'FUZZY': 'FUZZY_rP1wMvanhfmsm7Af4FcHvSvfhash43LWSY',
+  'ROSO': 'ROSO_rG1wMvanhfmsm7Af4FcHvSvfhash43LWSY',
+};
+
+/**
  * Fetches the current price of XRP in USD.
  */
 export async function getXrpPrice(): Promise<TokenPrice | null> {
@@ -93,13 +102,21 @@ export async function searchFirstLedgerToken(query: string): Promise<TokenPrice 
     const cleanQuery = query.replace('$', '').trim();
     if (!cleanQuery) return null;
 
-    // First try a direct search if it looks like currency_issuer
+    const normalizedQuery = cleanQuery.toUpperCase();
+
+    // 0. Check hardcoded registry for ecosystem tokens
+    if (TOKEN_REGISTRY[normalizedQuery]) {
+        const direct = await getTokenById(TOKEN_REGISTRY[normalizedQuery]);
+        if (direct) return direct;
+    }
+
+    // 1. First try a direct search if it looks like currency_issuer
     if (cleanQuery.includes('_')) {
         const direct = await getTokenById(cleanQuery);
         if (direct) return direct;
     }
 
-    // Attempt fuzzy search via POST /v1/search
+    // 2. Attempt fuzzy search via POST /v1/search
     const searchResponse = await fetch('https://api.xrpl.to/v1/search', {
         method: 'POST',
         headers: {
@@ -125,7 +142,7 @@ export async function searchFirstLedgerToken(query: string): Promise<TokenPrice 
         }
     }
 
-    // Fallback to volume sort scan
+    // 3. Fallback to volume sort scan
     const searchUrl = `https://api.xrpl.to/v1/tokens?sort=vol24h&limit=100`;
     const response = await fetch(searchUrl, {
       headers: {
@@ -140,7 +157,6 @@ export async function searchFirstLedgerToken(query: string): Promise<TokenPrice 
     const data = await response.json();
     if (!data.success || !data.tokens || data.tokens.length === 0) return null;
 
-    const normalizedQuery = cleanQuery.toUpperCase();
     const match = data.tokens.find((t: any) => 
         t.currency?.toUpperCase() === normalizedQuery || 
         t.name?.toUpperCase().includes(normalizedQuery)
