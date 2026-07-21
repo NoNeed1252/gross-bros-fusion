@@ -66,10 +66,15 @@ export async function POST(req: Request) {
     // Inject market data (use fallback string if timed out or errored)
     const activeMarketData = marketData || "Market data currently unavailable (neural link lag).";
 
-    // Strict Brevity Constraint
+    /**
+     * PRIORITY INSTRUCTIONS: 
+     * Explicitly order instructions to prioritize data over persona.
+     */
+    const priorityInstructions = "PRIORITY: If asked for market data or XRP pricing, provide factual, precise numbers first, then personality flare. Brevity is absolute.";
     const brevityConstraint = "CRITICAL: Keep responses to 1-2 short sentences max. Tactical, punchy, no paragraphs.";
 
-    const finalSystemPrompt = `${mergedPrompt}\n\n${activeMarketData}\n\n${brevityConstraint}`;
+    // Order: Instructions -> Market Data -> Persona Context
+    const finalSystemPrompt = `${priorityInstructions}\n\n${activeMarketData}\n\n${mergedPrompt}\n\n${brevityConstraint}`;
     
     // Log final system prompt for verification
     console.log("FINAL_SYSTEM_PROMPT_START");
