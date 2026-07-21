@@ -39,6 +39,9 @@ export function ChatTab({
   const [botOn, setBotOn] = useState(false)
   const [autonomous, setAutonomous] = useState(false)
 
+  // Map display species back to key for API
+  const speciesKey = bro.traits.find(t => ['Species', 'Type', 'Class'].includes(t.type))?.value || 'Ooze'
+
   const handleSend = useCallback(
     async (text: string) => {
       const userMsg: ChatMessage = { id: nextId(), role: 'user', text }
@@ -51,7 +54,8 @@ export function ChatTab({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [...messages, userMsg].filter(m => m.role !== 'system'),
-            systemPrompt: bro.systemPrompt
+            systemPrompt: bro.systemPrompt,
+            species: speciesKey
           }),
         })
 
@@ -66,7 +70,7 @@ export function ChatTab({
         setTyping(false)
       }
     },
-    [bro.systemPrompt, messages],
+    [bro.systemPrompt, messages, speciesKey],
   )
 
   const handleBotAction = useCallback(
@@ -82,7 +86,8 @@ export function ChatTab({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               messages: [{ role: 'user', text: prompt }],
-              systemPrompt: `${bro.systemPrompt}. Provide a short, in-character reaction to this event.`
+              systemPrompt: `${bro.systemPrompt}. Provide a short, in-character reaction to this event.`,
+              species: speciesKey
             }),
           })
           if (!response.ok) throw new Error('API Error')
@@ -124,7 +129,7 @@ export function ChatTab({
         }
       }
     },
-    [botOn, autonomous, bro.systemPrompt],
+    [botOn, autonomous, bro.systemPrompt, speciesKey],
   )
 
   if (!connected) {
