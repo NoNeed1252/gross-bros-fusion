@@ -11,40 +11,46 @@ export async function POST(req: Request) {
 
     console.log("Attempting OpenRouter fetch for model:", selectedModel);
 
-    // Dynamic Personality Resolution
+    // Run external lookups in parallel with a timeout to prevent blocking the entire chat
+    const timeout = (ms: number) => new Promise<null>((resolve) => setTimeout(() => resolve(null), ms));
+
+    const [personalityResult, marketData] = await Promise.all([
+      species 
+        ? Promise.race([
+            supabase
+              .from('bro_personalities')
+              .select('system_prompt')
+              .eq('species', species)
+              .single(),
+            timeout(2000) // 2s timeout for Supabase
+          ])
+        : Promise.resolve(null),
+      Promise.race([
+        getMarketBriefing(),
+        timeout(2000) // 2s timeout for Price API
+      ])
+    ]);
+
+    // Dynamic Personality Resolution logic
     let activeSystemPrompt = systemPrompt;
-
-    if (species) {
-      try {
-        const { data, error } = await supabase
-          .from('bro_personalities')
-          .select('system_prompt')
-          .eq('species', species)
-          .single();
-
-        if (data && !error) {
-          activeSystemPrompt = data.system_prompt;
-          console.log(`Resolved personality for ${species} from Supabase`);
-        } else {
-          // Fallback to hardcoded traits if not in Supabase
-          const fallback = (PERSONALITY_TRAITS as any)[species];
-          if (fallback) {
-            activeSystemPrompt = fallback.prompt;
-            console.log(`Species ${species} not in Supabase, using hardcoded fallback`);
-          }
-        }
-      } catch (dbErr) {
-        console.error("Supabase fetch failed, falling back to provided prompt:", dbErr);
+    if (personalityResult && 'data' in personalityResult && personalityResult.data) {
+      activeSystemPrompt = personalityResult.data.system_prompt;
+      console.log(`Resolved personality for ${species} from Supabase`);
+    } else if (species) {
+      // Fallback to hardcoded traits if Supabase timed out or missing key
+      const fallback = (PERSONALITY_TRAITS as any)[species];
+      if (fallback) {
+        activeSystemPrompt = fallback.prompt;
+        console.log(`Using hardcoded fallback for species ${species}`);
       }
     }
 
-    // Fetch real-time market data
-    const marketData = await getMarketBriefing();
+    // Inject market data (use fallback string if timed out)
+    const activeMarketData = marketData || "Market data currently unavailable (neural link lag).";
 
-    // Inject market data and system prompt
     const finalSystemPrompt = activeSystemPrompt 
-      ? `${activeSystemPrompt}\n\n${marketData}`
-      : marketData;
+      ? `${activeSystemPrompt}\n\n${activeMarketData}`
+      : activeMarketData;
 
     const finalMessages = [
       { role: 'system', content: finalSystemPrompt },
