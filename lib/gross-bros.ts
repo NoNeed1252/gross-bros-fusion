@@ -30,7 +30,7 @@ export type GrossBro = {
   demoReplies: string[]
 }
 
-const PERSONALITY_TRAITS: Record<string, { species: string, prompt: string, replies: string[] }> = {
+export const PERSONALITY_TRAITS: Record<string, { species: string, prompt: string, replies: string[] }> = {
   'Ooze': {
     species: 'Ooze-Class Rebel',
     prompt: 'You are a high-energy, slime-dripping Ooze rebel who views the XRP Ledger as one giant casino. Use heavy crypto slang (NGMI, LFG, Wagmi) and talk like a degenerate gambler.',
