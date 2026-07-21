@@ -8,9 +8,9 @@ export async function POST(req: Request) {
     const selectedModel = model || 'meta-llama/llama-3.1-8b-instruct';
 
     // Extract ticker from the last user message
-    // Matches $TICKER or standalone uppercase 3-10 char tickers
+    // Improved regex to capture case-insensitive tickers with or without $
     const lastMessage = messages[messages.length - 1]?.content || '';
-    const tickerMatch = lastMessage.match(/\$([A-Za-z0-9_-]{1,20})/i) || lastMessage.match(/\b([A-Z0-9]{3,10})\b/);
+    const tickerMatch = lastMessage.match(/\$([A-Za-z0-9_-]{1,20})/i) || lastMessage.match(/\b([A-Za-z0-9]{3,10})\b/);
     const queryTicker = tickerMatch ? tickerMatch[1] : null;
 
     const timeout = (ms: number) => new Promise<null>((resolve) => setTimeout(() => resolve(null), ms));
