@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { PERSONALITY_TRAITS } from '@/lib/gross-bros';
-import { getMarketBriefing } from '@/lib/firstledger';
+import { getMarketBriefing, searchFirstLedgerToken } from '@/lib/firstledger';
 
 export async function POST(req: Request) {
   try {
@@ -31,21 +31,20 @@ export async function POST(req: Request) {
       }
     };
 
-    // 1. Detect if market data is actually requested (keywords or tickers)
+    // 1. Detect if market data or specific token price is requested
     const marketKeywords = ['price', 'market', 'xrp', 'ticker', 'chart', 'floor', 'buy', 'sell', 'volume'];
-    const isMarketRequest = marketKeywords.some(keyword => lastUserMessage.toLowerCase().includes(keyword));
+    const tickerRegex = /\$([A-Za-z0-9_]{2,10})/;
+    const foundTicker = lastUserMessage.match(tickerRegex)?.[1];
+    const isMarketRequest = marketKeywords.some(keyword => lastUserMessage.toLowerCase().includes(keyword)) || !!foundTicker;
 
     // 2. Run external lookups in parallel
-    const [personalityResult, marketData] = await Promise.all([
+    const [personalityResult, genericMarketData, specificTokenData] = await Promise.all([
       species ? Promise.race([getSafePersonality(species), timeout(2000)]) : Promise.resolve(null),
       isMarketRequest 
-        ? Promise.race([
-            getMarketBriefing().catch(e => {
-              console.error("Market Data Fetch Error:", e);
-              return null;
-            }),
-            timeout(2000)
-          ])
+        ? Promise.race([getMarketBriefing().catch(() => null), timeout(2000)])
+        : Promise.resolve(null),
+      foundTicker
+        ? Promise.race([searchFirstLedgerToken(foundTicker).catch(() => null), timeout(2000)])
         : Promise.resolve(null)
     ]);
 
@@ -54,26 +53,30 @@ export async function POST(req: Request) {
     
     if (personalityResult && 'data' in personalityResult && personalityResult.data) {
       activeSystemPrompt = personalityResult.data.system_prompt;
-      console.log(`Resolved personality for ${species} from Supabase`);
     } else if (species) {
       const fallback = (PERSONALITY_TRAITS as any)[species];
       if (fallback) {
         activeSystemPrompt = fallback.prompt;
-        console.log(`Using hardcoded fallback for species ${species}`);
       }
     }
 
-    // Add brevity constraint to all system prompts
-    const brevityConstraint = "CRITICAL: Keep your response extremely short (1-2 sentences max). Do not ramble.";
-    activeSystemPrompt = activeSystemPrompt 
-      ? `${activeSystemPrompt}\n\n${brevityConstraint}`
-      : brevityConstraint;
-
-    // 3. Conditional injection: Only include market data if it was requested
-    let finalSystemPrompt = activeSystemPrompt;
-    if (isMarketRequest) {
-      const marketInfo = marketData || "Market data currently unavailable (neural link lag).";
-      finalSystemPrompt = `${activeSystemPrompt}\n\n[MARKET DATA CONTEXT]\n${marketInfo}`;
+    // 3. Conditional injection and personality suppression
+    let finalSystemPrompt = activeSystemPrompt || "";
+    
+    if (foundTicker && specificTokenData) {
+        // STRICT OVERRIDE: Suppress personality for price requests
+        finalSystemPrompt = `You are a high-speed Market Data Oracle. 
+A user is asking for the price of $${foundTicker.toUpperCase()}. 
+DATA: $${specificTokenData.ticker} is currently $${specificTokenData.price.toFixed(6)} USD (${specificTokenData.dayChangePercent.toFixed(2)}% 24h).
+INSTRUCTIONS: Return only the numerical data and a brief status (e.g. "Currently $0.0045 (+5%)"). 
+NO PERSONALITY. NO CONVERSATIONAL FILLER. NO MENTION OF MISSION SPECIALISTS.`;
+    } else if (isMarketRequest) {
+        const brevityConstraint = "CRITICAL: Keep your response extremely short (1-2 sentences max). Do not ramble.";
+        const marketInfo = genericMarketData || "Market data currently unavailable.";
+        finalSystemPrompt = `${activeSystemPrompt}\n\n${brevityConstraint}\n\n[MARKET DATA CONTEXT]\n${marketInfo}`;
+    } else {
+        const brevityConstraint = "CRITICAL: Keep your response extremely short (1-2 sentences max). Do not ramble.";
+        finalSystemPrompt = `${activeSystemPrompt}\n\n${brevityConstraint}`;
     }
 
     const finalMessages = [
