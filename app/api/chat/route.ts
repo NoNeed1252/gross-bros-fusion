@@ -1,52 +1,81 @@
 import { NextResponse } from 'next/server';
-import { getMarketBriefing, searchFirstLedgerToken } from '@/lib/firstledger';
+import { supabase } from '@/lib/supabase';
+import { PERSONALITY_TRAITS } from '@/lib/gross-bros';
+import { getMarketBriefing } from '@/lib/firstledger';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { messages, model } = body;
+    const { messages, model, systemPrompt, species } = body;
     const selectedModel = model || 'meta-llama/llama-3.1-8b-instruct';
+    const lastUserMessage = messages[messages.length - 1]?.content || "";
 
-    // Extract ticker from the last user message
-    const lastMessage = messages[messages.length - 1]?.content || '';
-    const tickerMatch = lastMessage.match(/\$([A-Za-z0-9_-]{1,20})/i) || lastMessage.match(/\b([A-Za-z0-9]{3,10})\b/);
-    const queryTicker = tickerMatch ? tickerMatch[1] : null;
+    console.log("Attempting OpenRouter fetch for model:", selectedModel);
 
+    // Timeout helper
     const timeout = (ms: number) => new Promise<null>((resolve) => setTimeout(() => resolve(null), ms));
 
-    // Parallel fetch with prioritization
-    const [marketBriefing, tokenData] = await Promise.all([
-      Promise.race([
-        getMarketBriefing().catch(() => null),
-        timeout(5000)
-      ]),
-      queryTicker ? Promise.race([
-        searchFirstLedgerToken(queryTicker).catch(() => null),
-        timeout(5000)
-      ]) : Promise.resolve(null)
+    /**
+     * Safely fetch personality from Supabase.
+     */
+    const getSafePersonality = async (speciesKey: string) => {
+      try {
+        const query = supabase.from('bro_personalities');
+        return await query
+          .select('system_prompt')
+          .eq('species', speciesKey)
+          .single();
+      } catch (e) {
+        console.error("Supabase Initialization/Query Failure (Graceful Fallback):", e);
+        return null;
+      }
+    };
+
+    // 1. Detect if market data is actually requested (keywords or tickers)
+    const marketKeywords = ['price', 'market', 'xrp', 'ticker', 'chart', 'floor', 'buy', 'sell', 'volume'];
+    const isMarketRequest = marketKeywords.some(keyword => lastUserMessage.toLowerCase().includes(keyword));
+
+    // 2. Run external lookups in parallel
+    const [personalityResult, marketData] = await Promise.all([
+      species ? Promise.race([getSafePersonality(species), timeout(2000)]) : Promise.resolve(null),
+      isMarketRequest 
+        ? Promise.race([
+            getMarketBriefing().catch(e => {
+              console.error("Market Data Fetch Error:", e);
+              return null;
+            }),
+            timeout(2000)
+          ])
+        : Promise.resolve(null)
     ]);
 
-    let contextData = "";
+    // Dynamic Personality Resolution logic
+    let activeSystemPrompt = systemPrompt;
     
-    // Priority 1: Specific Token Telemetry (if query detected)
-    if (tokenData) {
-      contextData = `CRITICAL DATA: The user is asking about $${tokenData.ticker}. You MUST report these specific numbers: Price $${tokenData.price.toFixed(8)}, 24h Change ${tokenData.dayChangePercent.toFixed(2)}%, 24h Volume ${tokenData.volume24h?.toLocaleString() || 'N/A'}. Issuer: ${tokenData.issuer || 'Native'}.\n\n`;
+    if (personalityResult && 'data' in personalityResult && personalityResult.data) {
+      activeSystemPrompt = personalityResult.data.system_prompt;
+      console.log(`Resolved personality for ${species} from Supabase`);
+    } else if (species) {
+      const fallback = (PERSONALITY_TRAITS as any)[species];
+      if (fallback) {
+        activeSystemPrompt = fallback.prompt;
+        console.log(`Using hardcoded fallback for species ${species}`);
+      }
     }
 
-    // Priority 2: General Market Context
-    if (marketBriefing) {
-      // Relegate general briefing if a specific token is detected
-      contextData += tokenData 
-        ? `Secondary Context (General Market): ${marketBriefing}`
-        : marketBriefing;
-    } else if (!tokenData) {
-      contextData = "Market data currently unavailable.";
+    // Add brevity constraint to all system prompts
+    const brevityConstraint = "CRITICAL: Keep your response extremely short (1-2 sentences max). Do not ramble.";
+    activeSystemPrompt = activeSystemPrompt 
+      ? `${activeSystemPrompt}\n\n${brevityConstraint}`
+      : brevityConstraint;
+
+    // 3. Conditional injection: Only include market data if it was requested
+    let finalSystemPrompt = activeSystemPrompt;
+    if (isMarketRequest) {
+      const marketInfo = marketData || "Market data currently unavailable (neural link lag).";
+      finalSystemPrompt = `${activeSystemPrompt}\n\n[MARKET DATA CONTEXT]\n${marketInfo}`;
     }
 
-    // System Prompt Construction: Factual data first, persona instructions last.
-    // Citation moved to the end to prevent early context truncation.
-    const finalSystemPrompt = `${contextData}\n\nYou are a professional market reporter. Provide factual numbers first. Speak like a normal person. No slang, no roleplay. Source: FirstLedger Telemetry.`;
-    
     const finalMessages = [
       { role: 'system', content: finalSystemPrompt },
       ...messages
@@ -67,14 +96,17 @@ export async function POST(req: Request) {
     });
 
     if (!response.ok) {
-      return NextResponse.json({ error: "API error" }, { status: response.status });
+      const errorText = await response.text();
+      console.error("OpenRouter API Error:", response.status, errorText);
+      return NextResponse.json({ error: "OpenRouter error: " + response.status }, { status: response.status });
     }
 
     const data = await response.json();
-    const text = data.choices?.[0]?.message?.content || "Connection failed.";
+    const text = data.choices?.[0]?.message?.content || "Bleh... neural link failed.";
     return NextResponse.json({ text });
 
   } catch (error) {
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    console.error("Runtime fetch error:", error);
+    return NextResponse.json({ error: "Server-side connection failure" }, { status: 500 });
   }
 }
