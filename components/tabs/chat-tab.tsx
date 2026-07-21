@@ -196,7 +196,7 @@ function ConnectGate({
         {connecting ? (
           <>
             <span className="typing-dot size-1.5 rounded-full bg-primary-foreground" />
-            Summoning {bro.name}...
+            Summoning Gross Bro...
           </>
         ) : (
           <>
