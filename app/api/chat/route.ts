@@ -1,58 +1,38 @@
-import { NextResponse } from 'next/server'
-
-export const dynamic = 'force-dynamic'
-
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
-// Fallback model if none is provided by client
-const DEFAULT_MODEL = 'meta-llama/llama-3.1-8b-instruct:free'
+import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
-  if (!OPENROUTER_API_KEY) {
-    return NextResponse.json({ error: 'OpenRouter API key not configured' }, { status: 500 })
-  }
-
   try {
-    const { messages, systemPrompt, model } = await req.json()
+    const body = await req.json();
+    const { messages, model } = body;
+    const selectedModel = model || 'meta-llama/llama-3.1-8b-instruct';
 
-    if (!messages || !Array.isArray(messages)) {
-      return NextResponse.json({ error: 'Invalid messages' }, { status: 400 })
-    }
+    console.log("Attempting OpenRouter fetch for model:", selectedModel);
 
-    // Flexibility: use model from client request, or default to a known free tier
-    const selectedModel = model || DEFAULT_MODEL
-
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://grossbros.vercel.app',
-        'X-Title': 'Gross Bros Fusion Portal',
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + process.env.OPENROUTER_API_KEY,
+        "HTTP-Referer": "https://grossbros.vercel.app",
+        "X-Title": "Gross Bros Fusion Portal"
       },
       body: JSON.stringify({
         model: selectedModel,
-        messages: [
-          { role: 'system', content: systemPrompt || 'You are a gross alien rebel survivor.' },
-          ...messages.map((m: any) => ({
-            role: m.role === 'user' ? 'user' : 'assistant',
-            content: m.text,
-          })),
-        ],
+        messages: messages,
       }),
-    })
+    });
 
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error('OpenRouter Error:', errorText)
-      return NextResponse.json({ error: 'OpenRouter API error' }, { status: response.status })
+      const errorText = await response.text();
+      console.error("OpenRouter API Error:", response.status, errorText);
+      return NextResponse.json({ error: "OpenRouter error: " + response.status }, { status: response.status });
     }
 
-    const data = await response.json()
-    const content = data.choices?.[0]?.message?.content || 'Bleh... something went wrong in my neural link.'
+    const data = await response.json();
+    return NextResponse.json(data);
 
-    return NextResponse.json({ text: content })
-  } catch (error: any) {
-    console.error('Chat API Error:', error)
-    return NextResponse.json({ error: 'Failed to process chat' }, { status: 500 })
+  } catch (error) {
+    console.error("Runtime fetch error:", error);
+    return NextResponse.json({ error: "Server-side connection failure" }, { status: 500 });
   }
 }
