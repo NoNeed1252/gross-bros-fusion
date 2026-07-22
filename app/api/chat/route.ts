@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveTickerToToken, getXrpPrice } from "@/lib/xrpl-oracle";
 
 /**
- * Chat API Route - Poke Personality Mode
- * Persona: Human, nonchalant, witty, professional, tactical.
- * Strictly avoids: "Gross Bro", "Mission Specialist", or slang/filler.
+ * Chat API Route - Market Oracle Mode
+ * Personality: Human, nonchalant, professional.
+ * Strict Constraint: Provide direct price data, no self-identification or persona definitions.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -15,32 +15,32 @@ export async function POST(req: NextRequest) {
     const tickerMatch = lastMessage.match(/\$[a-zA-Z0-9]+/);
     const ticker = tickerMatch ? tickerMatch[0] : null;
 
-    // 2. Market Data Retrieval
+    // 2. Direct Price Data Retrieval
+    // We fetch the data immediately to ensure accuracy and prevent LLM hallucination.
     const marketData = await (ticker ? resolveTickerToToken(ticker) : getXrpPrice());
 
-    // 3. System Prompt Construction
-    // Mirroring Poke's personality: professional, tactical, nonchalant, and human.
-    const systemPrompt = "You are Poke, a highly capable and professional AI assistant. Your voice is human, witty, and tactical, yet nonchalant. You avoid filler, branding, and over-the-top personas. When providing market data, stay direct but keep your characteristic dry wit.";
+    // 3. Response Construction
+    // The system prompt mandates a direct, nonchalant, and human voice.
+    // "You are the market oracle. Your only job is to provide direct price data. 
+    // Return the result in 1-2 lines in a nonchalant, human voice. Do not define your identity."
     
-    let marketBrief = "";
-    if (marketData) {
-      marketBrief = `Context: ${marketData.ticker} is at $${marketData.price.toFixed(6)} (${marketData.dayChangePercent.toFixed(2)}% in the last 24h).`;
-    } else {
-      marketBrief = "Context: Market telemetry is currently offline or unreachable.";
+    if (!marketData) {
+      return NextResponse.json({ 
+        text: "Couldn't find that one. Market telemetry might be congested." 
+      }, { status: 200 });
     }
 
-    const finalPrompt = `${systemPrompt}\n\n${marketBrief}\n\nBrevity: Keep it under 50 words.`;
+    // Direct, human, nonchalant response with raw data.
+    const response = `${marketData.ticker} is sitting at $${marketData.price.toFixed(6)}, ${marketData.dayChangePercent >= 0 ? '+' : ''}${marketData.dayChangePercent.toFixed(2)}% in the last 24h.`;
 
-    // Note: In a production environment, this prompt would be passed to an LLM provider.
-    // For this implementation, we return the structured response reflecting the new personality.
     return NextResponse.json({ 
-      text: `${finalPrompt}\n\nProcessed: ${ticker || "XRP"} metrics retrieved.` 
+      text: response 
     }, { status: 200 });
 
   } catch (err) {
     console.error("Chat API Error:", err);
     return NextResponse.json({ 
-      text: "Something went wrong. Telemetry link is down." 
+      text: "Neural link's a bit fuzzy. Can't grab that price right now." 
     }, { status: 200 });
   }
 }
