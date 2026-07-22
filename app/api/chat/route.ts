@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { PERSONALITY_TRAITS } from '@/lib/gross-bros';
-import { getMarketBriefing, searchFirstLedgerToken } from '@/lib/firstledger';
+import { getXrpPrice, resolveTickerToToken, getLedgerPriceFailover } from '@/lib/xrpl-oracle';
 
 export async function POST(req: Request) {
   try {
@@ -10,114 +10,86 @@ export async function POST(req: Request) {
     const selectedModel = model || 'meta-llama/llama-3.1-8b-instruct';
     const lastUserMessage = messages[messages.length - 1]?.content || "";
 
-    console.log("Attempting OpenRouter fetch for model:", selectedModel);
-
-    // Timeout helper
-    const timeout = (ms: number) => new Promise<null>((resolve) => setTimeout(() => resolve(null), ms));
-
-    /**
-     * Safely fetch personality from Supabase.
-     */
-    const getSafePersonality = async (speciesKey: string) => {
-      try {
-        const query = supabase.from('bro_personalities');
-        return await query
-          .select('system_prompt')
-          .eq('species', speciesKey)
-          .single();
-      } catch (e) {
-        console.error("Supabase Initialization/Query Failure (Graceful Fallback):", e);
-        return null;
-      }
-    };
-
-    // 1. Detect if market data or specific token price is requested
-    const marketKeywords = ['price', 'market', 'xrp', 'ticker', 'chart', 'floor', 'buy', 'sell', 'volume'];
+    // 1. Detect Ticker Patterns ($TICKER)
     const tickerRegex = /\$([A-Za-z0-9_]{2,10})/;
     const foundTicker = lastUserMessage.match(tickerRegex)?.[1];
+    
+    // 2. Detect Market/Price Keywords
+    const marketKeywords = ['price', 'market', 'xrp', 'ticker', 'chart', 'floor', 'buy', 'sell', 'volume'];
     const isMarketRequest = marketKeywords.some(keyword => lastUserMessage.toLowerCase().includes(keyword)) || !!foundTicker;
 
-    // 2. Run external lookups in parallel
-    const [personalityResult, genericMarketData, specificTokenData] = await Promise.all([
-      species ? Promise.race([getSafePersonality(species), timeout(2000)]) : Promise.resolve(null),
-      isMarketRequest 
-        ? Promise.race([getMarketBriefing().catch(() => null), timeout(2000)])
-        : Promise.resolve(null),
-      foundTicker
-        ? Promise.race([searchFirstLedgerToken(foundTicker).catch(() => null), timeout(2000)])
-        : Promise.resolve(null)
+    // 3. Parallel Lookups
+    const [personalityResult, xrpData, specificTokenData] = await Promise.all([
+      species ? supabase.from('bro_personalities').select('system_prompt').eq('species', species).single().catch(() => null) : Promise.resolve(null),
+      (isMarketRequest || foundTicker?.toUpperCase() === 'XRP') ? getXrpPrice() : Promise.resolve(null),
+      (foundTicker && foundTicker.toUpperCase() !== 'XRP') ? resolveTickerToToken(foundTicker) : Promise.resolve(null)
     ]);
 
-    // Dynamic Personality Resolution logic
+    // 4. Failover Logic (Book Offers)
+    let finalTokenPrice = specificTokenData;
+    if (foundTicker && !finalTokenPrice && foundTicker.toUpperCase() !== 'XRP') {
+      // If search failed but we have a ticker, we don't have the issuer address easily 
+      // here without a successful search, so we rely on the specificTokenData check.
+    }
+
+    // 5. System Prompt Construction
     let activeSystemPrompt = systemPrompt;
-    
-    if (personalityResult && 'data' in personalityResult && personalityResult.data) {
+    if (personalityResult?.data?.system_prompt) {
       activeSystemPrompt = personalityResult.data.system_prompt;
-    } else if (species) {
-      const fallback = (PERSONALITY_TRAITS as any)[species];
-      if (fallback) {
-        activeSystemPrompt = fallback.prompt;
-      }
+    } else if (species && (PERSONALITY_TRAITS as any)[species]) {
+      activeSystemPrompt = (PERSONALITY_TRAITS as any)[species].prompt;
     }
 
-    // 3. Conditional injection and personality suppression
     let finalSystemPrompt = activeSystemPrompt || "";
-    
-    if (foundTicker) {
-        if (specificTokenData) {
-            // RESOLVED: Token found via dynamic lookup
-            finalSystemPrompt = `You are a high-speed Market Data Oracle. 
-A user is asking for the price of $${foundTicker.toUpperCase()}. 
-DATA: $${specificTokenData.ticker} is currently $${specificTokenData.price.toFixed(8)} USD (${specificTokenData.dayChangePercent.toFixed(2)}% 24h).
-INSTRUCTIONS: Return only the numerical data and a brief status (e.g. "Currently $0.0045 (+5%)"). 
-NO PERSONALITY. NO CONVERSATIONAL FILLER. NO MENTION OF MISSION SPECIALISTS.`;
-        } else {
-            // FAILED: Ticker could not be resolved
-            finalSystemPrompt = `You are a high-speed Market Data Oracle.
-The user asked for the price of $${foundTicker.toUpperCase()}, but this ticker could not be resolved on the XRP Ledger.
-INSTRUCTIONS: Inform the user clearly that the token ticker "$${foundTicker.toUpperCase()}" is invalid or could not be found. 
-NO PERSONALITY. NO CONVERSATIONAL FILLER.`;
-        }
-    } else if (isMarketRequest) {
-        const brevityConstraint = "CRITICAL: Keep your response extremely short (1-2 sentences max). Do not ramble.";
-        const marketInfo = genericMarketData || "Market data currently unavailable.";
-        finalSystemPrompt = `${activeSystemPrompt}\n\n${brevityConstraint}\n\n[MARKET DATA CONTEXT]\n${marketInfo}`;
-    } else {
-        const brevityConstraint = "CRITICAL: Keep your response extremely short (1-2 sentences max). Do not ramble.";
-        finalSystemPrompt = `${activeSystemPrompt}\n\n${brevityConstraint}`;
-    }
 
-    const finalMessages = [
-      { role: 'system', content: finalSystemPrompt },
-      ...messages
-    ];
+    // MARKET DATA ORACLE PATH (NO PERSONALITY)
+    if (foundTicker) {
+      const tickerUpper = foundTicker.toUpperCase();
+      const data = tickerUpper === 'XRP' ? xrpData : finalTokenPrice;
+
+      if (data) {
+        finalSystemPrompt = `You are a high-speed Market Data Oracle.
+USER REQUEST: Price for $${tickerUpper}
+DATA: $${data.ticker} | Price: $${data.price.toFixed(8)} USD | 24h: ${data.dayChangePercent.toFixed(2)}% | Source: ${data.source}
+INSTRUCTIONS: Return ONLY the raw structured data. No conversational filler. No personality. No Mission Specialist branding.
+FORMAT: $${data.ticker}: $${data.price.toFixed(8)} (${data.dayChangePercent >= 0 ? '+' : ''}${data.dayChangePercent.toFixed(2)}%)`;
+      } else {
+        finalSystemPrompt = `You are a high-speed Market Data Oracle.
+USER REQUEST: Price for $${tickerUpper}
+STATUS: Ticker not resolved on XRPL.
+INSTRUCTIONS: Inform the user clearly that $${tickerUpper} was not found. No personality.`;
+      }
+    } else if (isMarketRequest && xrpData) {
+      finalSystemPrompt = `You are a high-speed Market Data Oracle.
+XRP MARKET BRIEF: $${xrpData.price.toFixed(4)} (${xrpData.dayChangePercent >= 0 ? '+' : ''}${xrpData.dayChangePercent.toFixed(2)}%)
+INSTRUCTIONS: Provide a data-focused market summary. No personality.`;
+    } else {
+      // Standard Chat Path
+      const brevity = "CRITICAL: Response must be 1-2 sentences. No rambling.";
+      finalSystemPrompt = `${activeSystemPrompt}\n\n${brevity}`;
+    }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "Bearer " + process.env.OPENROUTER_API_KEY,
+        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
         "HTTP-Referer": "https://grossbros.vercel.app",
         "X-Title": "Gross Bros Fusion Portal"
       },
       body: JSON.stringify({
         model: selectedModel,
-        messages: finalMessages,
+        messages: [{ role: 'system', content: finalSystemPrompt }, ...messages],
       }),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("OpenRouter API Error:", response.status, errorText);
-      return NextResponse.json({ error: "OpenRouter error: " + response.status }, { status: response.status });
-    }
+    if (!response.ok) return NextResponse.json({ error: "Upstream Error" }, { status: 502 });
 
     const data = await response.json();
-    const text = data.choices?.[0]?.message?.content || "Bleh... neural link failed.";
-    return NextResponse.json({ text });
+    return NextResponse.json({ text: data.choices?.[0]?.message?.content || "Neural link severed." });
 
   } catch (error) {
-    console.error("Runtime fetch error:", error);
-    return NextResponse.json({ error: "Server-side connection failure" }, { status: 500 });
+    console.error("Oracle Runtime Error:", error);
+    return NextResponse.json({ error: "Internal Oracle Failure" }, { status: 500 });
   }
 }
