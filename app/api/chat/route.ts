@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveTickerToToken, getXrpPrice } from "@/lib/xrpl-oracle";
-import { createClient } from "@supabase/supabase-js";
-
-// Initialize Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, model } = await req.json();
+    const { messages } = await req.json();
     const lastMessage = messages[messages.length - 1]?.content || "";
 
     // 1. Ticker Parsing
@@ -20,19 +15,22 @@ export async function POST(req: NextRequest) {
     let characterContext = null;
 
     // 2. Data Fetching (Parallel)
-    // FIX: Using safe destructuring for Supabase to avoid .single().catch() TypeError
+    const pricePromise = ticker ? resolveTickerToToken(ticker) : getXrpPrice();
+    const characterPromise = isSupabaseConfigured() 
+      ? getSupabase()
+          .from("bro_personalities")
+          .select("*")
+          .limit(1)
+          .single()
+      : Promise.resolve({ data: null, error: null });
+
     const [priceResult, characterResult] = await Promise.all([
-      ticker ? resolveTickerToToken(ticker) : getXrpPrice(),
-      supabase
-        .from("personalities")
-        .select("*")
-        .eq("is_active", true)
-        .single()
+      pricePromise,
+      characterPromise
     ]);
 
     marketData = priceResult;
     
-    // Handle Supabase result safely
     if (characterResult && !characterResult.error && characterResult.data) {
       characterContext = characterResult.data;
     }
@@ -42,11 +40,10 @@ export async function POST(req: NextRequest) {
       ? `Market Data: ${marketData.ticker} is currently $${marketData.price.toFixed(6)} (${marketData.dayChangePercent.toFixed(2)}% 24h).`
       : "Market telemetry currently congested.";
 
-    const systemPrompt = `You are a Gross Bro market oracle. ${characterContext?.personality_logic || "Be professional and concise."}
+    const systemPrompt = `You are a Gross Bro market oracle. ${characterContext?.system_prompt || "Be professional and concise."}
 Current Context: ${marketBrief}
 Brevity: Response must be under 50 words.`;
 
-    // 4. Response Logic (Generic character response for telemetry fix)
     return NextResponse.json({ 
       text: `${systemPrompt}\n\nProcessed query for ${ticker || "XRP"}.` 
     }, { status: 200 });
