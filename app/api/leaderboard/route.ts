@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,6 +9,7 @@ export async function GET() {
   }
 
   try {
+    const supabase = getSupabase()
     // UPDATED: Querying 'operatives' table which exists in 'Gross Bros Stats' DB
     // mapping wallet_address to address, and total_score to score
     const { data, error } = await supabase
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid score data' }, { status: 400 })
     }
 
+    const supabase = getSupabase()
     // UPDATED: Upsert into 'operatives' table using wallet_address as key
     const { data, error } = await supabase
       .from('operatives')
