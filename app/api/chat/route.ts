@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   const { messages, input } = await req.json();
-  const latest = messages[messages.length - 1].content.toLowerCase();
+  // Safe access for content and fallback
+  const latest = (messages?.[messages.length - 1]?.content || input || "").toLowerCase();
 
   // 1. Data-first pipe for XRPL / Tokens / NFTs
   if (latest.includes('xrp') || latest.includes('token') || latest.includes('nft') || latest.includes('price')) {
@@ -34,5 +35,7 @@ export async function POST(req: Request) {
   });
 
   const chatData = await response.json();
-  return NextResponse.json({ response: chatData.choices[0].message.content });
+  // Safe chaining
+  const content = chatData?.choices?.[0]?.message?.content || "No response.";
+  return NextResponse.json({ response: content });
 }
