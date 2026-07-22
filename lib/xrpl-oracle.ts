@@ -1,7 +1,7 @@
 /**
  * XRPL Market Oracle
  * Primary: XRPL.to V1 API
- * Failover: Direct XRPL Ledger book_offers (via wss)
+ * Failover: Direct XRPL Ledger book_offers (via HTTPS RPC)
  */
 
 export interface TokenPrice {
@@ -72,18 +72,19 @@ export async function getTokenById(id: string): Promise<TokenPrice | null> {
 }
 
 /**
- * Dynamically resolves a ticker symbol to an XRPL token using search.
+ * Dynamically resolves a ticker symbol to an XRPL token.
+ * Note: Uses GET https://api.xrpl.to/v1/tokens/search?q=${ticker} per user spec.
  */
 export async function resolveTickerToToken(ticker: string): Promise<TokenPrice | null> {
   try {
     const cleanTicker = ticker.replace('$', '').trim().toUpperCase();
     if (!cleanTicker) return null;
 
-    // Primary: XRPL.to Search
-    const searchResponse = await fetch('https://api.xrpl.to/v1/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },
-      body: JSON.stringify({ search: cleanTicker, limit: 5 })
+    // Primary: XRPL.to Search (GET variant)
+    const searchUrl = `https://api.xrpl.to/v1/tokens/search?q=${encodeURIComponent(cleanTicker)}`;
+    const searchResponse = await fetch(searchUrl, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }
     });
 
     if (searchResponse.ok) {
@@ -101,7 +102,28 @@ export async function resolveTickerToToken(ticker: string): Promise<TokenPrice |
       }
     }
 
-    // Failover: Try volume scan
+    // Failover 1: POST variant (backup)
+    const postSearchResponse = await fetch('https://api.xrpl.to/v1/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+      body: JSON.stringify({ search: cleanTicker, limit: 5 })
+    });
+
+    if (postSearchResponse.ok) {
+        const searchData = await postSearchResponse.json();
+        if (searchData.success && searchData.tokens?.length > 0) {
+            const bestMatch = searchData.tokens.find((t: any) => 
+                (t.token || t.currency || '').toUpperCase() === cleanTicker
+            ) || searchData.tokens[0];
+            const identifier = bestMatch.md5 || bestMatch.slug;
+            if (identifier) {
+                const detail = await getTokenById(identifier);
+                if (detail) return detail;
+            }
+        }
+    }
+
+    // Failover 2: Try volume scan
     const volRes = await fetch('https://api.xrpl.to/v1/tokens?sort=vol24h&limit=100', {
        headers: { 'User-Agent': 'Mozilla/5.0' }
     });
@@ -132,12 +154,11 @@ export async function resolveTickerToToken(ticker: string): Promise<TokenPrice |
 
 /**
  * Failover logic for real-time DEX price calculation using book_offers.
- * Note: This implementation uses raw fetch to a public RPC as a failover 
- * without requiring the full xrpl.js bundle if not installed.
+ * Uses standard HTTPS JSON-RPC to s1.ripple.com (no port 51234).
  */
 export async function getLedgerPriceFailover(currency: string, issuer: string): Promise<number | null> {
   try {
-    const response = await fetch('https://s1.ripple.com:51234', {
+    const response = await fetch('https://s1.ripple.com', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
