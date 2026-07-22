@@ -9,14 +9,25 @@ export async function GET() {
   }
 
   try {
+    // UPDATED: Querying 'operatives' table which exists in 'Gross Bros Stats' DB
+    // mapping wallet_address to address, and total_score to score
     const { data, error } = await supabase
-      .from('leaderboard')
-      .select('*')
-      .order('score', { ascending: false })
+      .from('operatives')
+      .select('wallet_address, total_score, handle')
+      .order('total_score', { ascending: false })
       .limit(20)
 
     if (error) throw error
-    return NextResponse.json({ scores: data || [] })
+
+    // Map the internal column names to the frontend's expected leaderboard format
+    const formattedScores = (data || []).map((op: any) => ({
+      address: op.wallet_address,
+      score: op.total_score,
+      bro_name: op.handle || 'Operative',
+      wave: 1
+    }))
+
+    return NextResponse.json({ scores: formattedScores })
   } catch (err) {
     console.error('Leaderboard GET Error:', err)
     return NextResponse.json({ scores: [] })
@@ -29,22 +40,20 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { address, score, wave, bro_name, bro_image } = await req.json()
+    const { address, score } = await req.json()
 
     if (!address || typeof score !== 'number') {
       return NextResponse.json({ error: 'Invalid score data' }, { status: 400 })
     }
 
+    // UPDATED: Upsert into 'operatives' table using wallet_address as key
     const { data, error } = await supabase
-      .from('leaderboard')
-      .insert([{ 
-        address, 
-        score, 
-        wave, 
-        bro_name, 
-        bro_image,
-        created_at: new Date().toISOString() 
-      }])
+      .from('operatives')
+      .upsert({ 
+        wallet_address: address, 
+        total_score: score,
+        updated_at: new Date().toISOString() 
+      }, { onConflict: 'wallet_address' })
       .select()
 
     if (error) throw error
