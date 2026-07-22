@@ -11,15 +11,18 @@ export async function POST(req: NextRequest) {
     
     const lastMsg = [...cleanHistory].reverse().find(m => m.role === 'user')?.content || "";
 
-    // Market data bypass
+    // Market data bypass with hyperlinked-domain workaround
     const match = lastMsg.match(/\$[a-zA-Z0-9]+/);
     if (match) {
       const sym = match[0].replace('$', '').toUpperCase();
       
-      const res = await fetch('https://api.xrpl.to/v1/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },
-        body: JSON.stringify({ search: sym, limit: 1 })
+      // Using direct fetch to xrpl.to with standard headers
+      const res = await fetch('https://api.xrpl.to/v1/search?search=' + sym + '&limit=1', {
+        method: 'GET',
+        headers: { 
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
       });
 
       if (res.ok) {
