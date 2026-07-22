@@ -1,55 +1,38 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
-export async function POST(req: NextRequest) {
-  try {
-    const { messages } = await req.json();
-    
-    // Sanitize history: remove any system-level leaks
-    const cleanHistory = messages.filter((m: any) => 
-      m.role === 'user' || m.role === 'assistant'
-    );
-    
-    const lastMsg = [...cleanHistory].reverse().find(m => m.role === 'user')?.content || "";
+export async function POST(req: Request) {
+  const { messages, input } = await req.json();
+  const latest = messages[messages.length - 1].content.toLowerCase();
 
-    // Market data bypass with hyperlinked-domain workaround
-    const match = lastMsg.match(/\$[a-zA-Z0-9]+/);
-    if (match) {
-      const sym = match[0].replace('$', '').toUpperCase();
-      
-      // Using direct fetch to xrpl.to with standard headers
-      const res = await fetch('https://api.xrpl.to/v1/search?search=' + sym + '&limit=1', {
-        method: 'GET',
-        headers: { 
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-      });
-
-      if (res.ok) {
-        const d = await res.json();
-        if (d.success && d.tokens?.length > 0) {
-          const t = d.tokens[0];
-          return NextResponse.json({ 
-            text: `${t.token || t.currency}: $${parseFloat(t.usd).toFixed(6)} (${t.pro24h >= 0 ? '+' : ''}${t.pro24h}% 24h)` 
-          }, { status: 200 });
-        }
-      }
-      return NextResponse.json({ text: "Data unavailable." }, { status: 200 });
-    }
-
-    // Config for conversational model
-    const config = {
-      role: "system",
-      content: "Assistant role: professional, direct, no persona, no filler."
-    };
-    
-    return NextResponse.json({ 
-      text: "Acknowledged.",
-      model_config: config,
-      history: cleanHistory
-    }, { status: 200 });
-
-  } catch (err) {
-    return NextResponse.json({ text: "Error." }, { status: 200 });
+  // 1. Data-first pipe for XRPL / Tokens / NFTs
+  if (latest.includes('xrp') || latest.includes('token') || latest.includes('nft') || latest.includes('price')) {
+    const res = await fetch('https://api.xrpl' + '.to/v1/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: latest })
+    });
+    const data = await res.json();
+    return NextResponse.json({ response: JSON.stringify(data) });
   }
+
+  // 2. LLM pipe for general chat
+  const response = await fetch('https://openrouter' + '.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'HTTP-Referer': 'https://grossbros.vercel.app',
+      'X-Title': 'Gross Bros Fusion'
+    },
+    body: JSON.stringify({
+      model: 'meta-llama/llama-3.1-8b-instruct',
+      messages: [
+        { role: 'system', content: 'You are a professional assistant. You are tactical, precise, and human.' },
+        { role: 'user', content: input }
+      ]
+    })
+  });
+
+  const chatData = await response.json();
+  return NextResponse.json({ response: chatData.choices[0].message.content });
 }
