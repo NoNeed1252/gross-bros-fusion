@@ -19,7 +19,7 @@ interface Enemy {
   size: number;
 }
 
-export default function InvadersGame() {
+export function InvadersGame() {
   // Game state
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
@@ -215,3 +215,5 @@ export default function InvadersGame() {
     </div>
   );
 }
+
+export default InvadersGame;
