@@ -16,8 +16,11 @@ import type { GrossBro } from '@/lib/gross-bros'
 import { supabase } from '@/lib/supabase'
 import { Leaderboard } from './leaderboard'
 
-const GAME_W = 640
-... (rest of original file unchanged) ...
+const GAME_W = 640;
+
+// The original file was missing the component wrapper, which caused a syntax error.
+// We declare the component here and export it as the default.
+export default function InvadersGame() {
   return (
     <div className="select-none">
       <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-[#0a1512] neon-border">
