@@ -14,7 +14,6 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 let supabase: SupabaseClient | null = null
 
-// Only create Supabase client if env vars exist (prevents crash on deploy)
 if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
   supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -28,7 +27,7 @@ const GAME_H = 560
 const PLAYER_W = 56
 const PLAYER_H = 56
 const PLAYER_Y = GAME_H - 80
-const PLAYER_SPEED_BASE = 6
+const PLAYER_SPEED_BASE = 8          // ← Increased for snappier movement
 
 const BULLET_SPEED = 9
 const BOMB_SPEED = 3.4
@@ -70,9 +69,9 @@ type GameState = {
   speed: number
   fireCooldown: number
   bombTimer: number
-  activeShield: number // timer
-  activeDouble: number // timer
-  activeSpeed: number  // timer
+  activeShield: number
+  activeDouble: number
+  activeSpeed: number
 }
 
 const NEON = '#00ff9f'
@@ -154,7 +153,7 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       barriers: initBarriers(),
       powerups: [],
       dir: 1,
-      speed: 0.7 + waveNum * 0.3,
+      speed: 1.0 + waveNum * 0.35,   // ← Faster invaders
       fireCooldown: 0,
       bombTimer: 60,
       activeShield: 0,
@@ -169,7 +168,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
     setStatus('over')
     setBest((b) => Math.max(b, scoreRef.current))
 
-    // Supabase leaderboard (only runs if env vars are set)
     if (supabase) {
       const walletAddress =
         bro?.owner || localStorage.getItem('wallet_address') || 'Anonymous'
@@ -182,25 +180,21 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
           wave: waveRef.current,
         })
         .then(({ error }) => {
-          if (error) {
-            console.error('Leaderboard insert error:', error)
-          } else {
-            console.log('Leaderboard entry submitted for', walletAddress)
-          }
+          if (error) console.error('Leaderboard error:', error)
         })
     }
 
     if (scoreRef.current > 0) {
-      console.log('Final Score:', scoreRef.current, 'for address:', bro?.owner)
+      console.log('Final Score:', scoreRef.current)
     }
   }, [bro?.owner])
 
   const drawEnemy = (ctx: CanvasRenderingContext2D, x: number, y: number, type: number, step: number) => {
     ctx.fillStyle = ENEMY_COLORS[type]
     const s = INV_SIZE / 12
-    
+
     ctx.beginPath()
-    if (type === 0) { // Bug
+    if (type === 0) {
       ctx.fillRect(x + 4*s, y + 2*s, 4*s, 2*s)
       ctx.fillRect(x + 2*s, y + 4*s, 8*s, 2*s)
       ctx.fillRect(x, y + 6*s, 12*s, 2*s)
@@ -213,12 +207,12 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
         ctx.fillRect(x, y + 10*s, 2*s, 2*s)
         ctx.fillRect(x + 10*s, y + 10*s, 2*s, 2*s)
       }
-    } else if (type === 1) { // Ship
+    } else if (type === 1) {
       ctx.fillRect(x + 5*s, y, 2*s, 4*s)
       ctx.fillRect(x + 2*s, y + 4*s, 8*s, 4*s)
       ctx.fillRect(x, y + 8*s, 12*s, 2*s)
       ctx.fillRect(x + 4*s, y + 10*s, 4*s, 2*s)
-    } else if (type === 2) { // Spider
+    } else if (type === 2) {
       ctx.fillRect(x + 3*s, y + 2*s, 6*s, 6*s)
       ctx.fillRect(x, y + 4*s, 3*s, 2*s)
       ctx.fillRect(x + 9*s, y + 4*s, 3*s, 2*s)
@@ -229,7 +223,7 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
         ctx.fillRect(x, y + 10*s, 2*s, 2*s)
         ctx.fillRect(x + 10*s, y + 10*s, 2*s, 2*s)
       }
-    } else { // Robot
+    } else {
       ctx.fillRect(x + 2*s, y, 8*s, 8*s)
       ctx.fillRect(x + 4*s, y + 2*s, 1.5*s, 1.5*s)
       ctx.fillRect(x + 6.5*s, y + 2*s, 1.5*s, 1.5*s)
@@ -264,13 +258,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       }
       ctx.fill()
       ctx.stroke()
-      if (b.health < 8) {
-        ctx.strokeStyle = '#0a1512'
-        ctx.beginPath()
-        ctx.moveTo(bx + 10, by + 5); ctx.lineTo(bx + 20, by + 15)
-        ctx.moveTo(bx + 50, by + 20); ctx.lineTo(bx + 40, by + 30)
-        ctx.stroke()
-      }
     }
 
     const stepCount = Math.floor(Date.now() / 500)
@@ -299,14 +286,14 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
     ctx.strokeStyle = s.activeSpeed > 0 ? POWERUP_COLORS.speed : NEON
     ctx.lineWidth = 1.5
     for (let i = 0; i < 3; i++) {
-        const ty = py + ph + 2 + (i * 4 + tTime % 4)
-        const tOffset = Math.sin(tTime + i) * 2
-        ctx.beginPath()
-        ctx.moveTo(px + pw * 0.35 + tOffset, ty)
-        ctx.lineTo(px + pw * 0.35 + tOffset, ty + 6)
-        ctx.moveTo(px + pw * 0.65 + tOffset, ty)
-        ctx.lineTo(px + pw * 0.65 + tOffset, ty + 6)
-        ctx.stroke()
+      const ty = py + ph + 2 + (i * 4 + tTime % 4)
+      const tOffset = Math.sin(tTime + i) * 2
+      ctx.beginPath()
+      ctx.moveTo(px + pw * 0.35 + tOffset, ty)
+      ctx.lineTo(px + pw * 0.35 + tOffset, ty + 6)
+      ctx.moveTo(px + pw * 0.65 + tOffset, ty)
+      ctx.lineTo(px + pw * 0.65 + tOffset, ty + 6)
+      ctx.stroke()
     }
 
     ctx.save()
@@ -324,7 +311,7 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
     ctx.strokeStyle = shipColor
     ctx.lineWidth = 2
     ctx.lineJoin = 'round'
-    
+
     ctx.beginPath()
     ctx.moveTo(px + pw/2, py + 4)
     ctx.lineTo(px + pw + 8, py + ph - 8)
@@ -336,14 +323,16 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
 
     ctx.lineWidth = 1
     ctx.beginPath()
-    ctx.moveTo(px + pw * 0.2, py + ph * 0.7); ctx.lineTo(px + pw * 0.8, py + ph * 0.7)
-    ctx.moveTo(px + pw * 0.5, py + ph + 2); ctx.lineTo(px + pw * 0.5, py + py * 0.7)
+    ctx.moveTo(px + pw * 0.2, py + ph * 0.7)
+    ctx.lineTo(px + pw * 0.8, py + ph * 0.7)
+    ctx.moveTo(px + pw * 0.5, py + ph + 2)
+    ctx.lineTo(px + pw * 0.5, py + py * 0.7)
     ctx.stroke()
 
     const cockpitSize = 26
     const cx = px + (pw - cockpitSize) / 2
     const cy = py + 6
-    
+
     const pimg = playerImgRef.current
     if (pimg && pimg.complete && pimg.naturalWidth > 0) {
       ctx.save()
@@ -352,17 +341,11 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       ctx.clip()
       ctx.drawImage(pimg, cx, cy, cockpitSize, cockpitSize)
       ctx.restore()
-      
+
       ctx.strokeStyle = shipColor
       ctx.lineWidth = 1.5
       ctx.beginPath()
       ctx.arc(cx + cockpitSize/2, cy + cockpitSize/2, cockpitSize/2, 0, Math.PI * 2)
-      ctx.stroke()
-
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      ctx.arc(cx + cockpitSize/2, cy + cockpitSize/2, cockpitSize/2 - 2, -Math.PI * 0.7, -Math.PI * 0.3)
       ctx.stroke()
     } else {
       ctx.fillStyle = shipColor
@@ -446,15 +429,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
         s.bombTimer = Math.max(20, 100 - waveRef.current * 8)
       }
       s.bombs = s.bombs.filter((b) => b.y < GAME_H + 20)
-      for (const b of s.bombs) {
-        b.y += BOMB_SPEED
-        for (const bar of s.barriers) {
-          if (bar.health > 0 && b.x > bar.x && b.x < bar.x + BARRIER_W && b.y > bar.y && b.y < bar.y + BARRIER_H) {
-            bar.health -= 1
-            b.y = GAME_H + 100
-          }
-        }
-      }
 
       s.powerups = s.powerups.filter(pu => pu.y < GAME_H + 20)
       for (const pu of s.powerups) {
@@ -500,10 +474,7 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
         }
       }
 
-      if (s.invaders.some((i) => i.alive && i.y + INV_SIZE >= BARRIER_Y)) {
-        endGame()
-      }
-
+      if (s.invaders.some((i) => i.alive && i.y + INV_SIZE >= BARRIER_Y)) endGame()
       if (s.invaders.every((i) => !i.alive)) {
         waveRef.current += 1
         setWave(waveRef.current)
@@ -550,9 +521,7 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       const k = e.key.toLowerCase()
       if (['arrowleft', 'a'].includes(k)) keysRef.current.delete('left')
       if (['arrowright', 'd'].includes(k)) keysRef.current.delete('right')
-      if ([' ', 'arrowup', 'w'].includes(k)) {
-        keysRef.current.delete('fire')
-      }
+      if ([' ', 'arrowup', 'w'].includes(k)) keysRef.current.delete('fire')
     }
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)
