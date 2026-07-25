@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { Leaderboard } from "./leaderboard";
-import { GROSS_BROS } from "@/assets";
+import { GROSS_BROS } from "../../assets";
 
 const GAME_W = 640;
 const GAME_H = 560;
