@@ -98,17 +98,6 @@
 }
 
 @layer utilities {
-  /* Neon text glow for the alien portal */
-  .text-glow {
-    text-shadow: 0 0 12px oklch(0.87 0.2 165 / 55%), 0 0 32px oklch(0.87 0.2 165 / 25%);
-  }
-  .neon-border {
-    box-shadow: 0 0 0 1px oklch(0.87 0.2 165 / 25%), 0 0 24px oklch(0.87 0.2 165 / 15%),
-      inset 0 0 24px oklch(0.87 0.2 165 / 6%);
-  }
-  .neon-ring {
-    box-shadow: 0 0 20px oklch(0.87 0.2 165 / 45%), 0 0 60px oklch(0.87 0.2 165 / 20%);
-  }
 }
 
 /* Deep-space animated backdrop */
