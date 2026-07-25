@@ -10,6 +10,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GrossBro } from '@/lib/gross-bros'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 const GAME_W = 640
 const GAME_H = 560
@@ -157,12 +163,31 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
     statusRef.current = 'over'
     setStatus('over')
     setBest((b) => Math.max(b, scoreRef.current))
-    
+
+    // Supabase leaderboard submission (fire-and-forget, non-blocking)
+    const walletAddress =
+      bro?.owner || localStorage.getItem('wallet_address') || 'Anonymous'
+
+    supabase
+      .from('leaderboard')
+      .insert({
+        wallet_address: walletAddress,
+        score: scoreRef.current,
+        wave: waveRef.current,
+      })
+      .then(({ error }) => {
+        if (error) {
+          console.error('Leaderboard insert error:', error)
+        } else {
+          console.log('Leaderboard entry submitted for', walletAddress)
+        }
+      })
+
     // Notify High Score
     if (scoreRef.current > 0) {
-      console.log('Final Score:', scoreRef.current, 'for address:', bro.owner);
+      console.log('Final Score:', scoreRef.current, 'for address:', bro?.owner)
     }
-  }, [bro.owner])
+  }, [bro?.owner])
 
   const drawEnemy = (ctx: CanvasRenderingContext2D, x: number, y: number, type: number, step: number) => {
     ctx.fillStyle = ENEMY_COLORS[type]
