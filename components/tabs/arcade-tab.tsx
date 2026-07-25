@@ -1,7 +1,12 @@
 'use client';
 
 import { Gamepad2, Trophy, Keyboard, Loader2 } from 'lucide-react'
-import { InvadersGame } from '@/components/arcade/invaders-game'
+import dynamic from 'next/dynamic'
+// Load the heavy canvas game only on the client to avoid SSR hydration issues on mobile Safari.
+const InvadersGame = dynamic(
+  () => import('@/components/arcade/invaders-game').then((mod) => mod.InvadersGame),
+  { ssr: false }
+)
 import { useState, useEffect } from 'react'
 import type { GrossBro } from '@/lib/gross-bros'
 
