@@ -567,14 +567,55 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
           </span>
         </div>
 
-        <div className="relative w-full aspect-[640/560] touch-none">
-          <canvas ref={canvasRef} width={GAME_W} height={GAME_H} className="block w-full h-full" />
+        <div className="relative w-full aspect-[640/560]">
+          <canvas ref={canvasRef} width={GAME_W} height={GAME_H} className="block w-full h-full touch-none" />
           {status !== 'playing' && (
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-background/80 px-6 text-center backdrop-blur-sm">
               <p className="font-mono text-[11px] uppercase tracking-[0.3em]" style={{ color: NEON }}>XRP-7 · ARCADE</p>
               <h2 className="text-3xl font-bold tracking-tight text-balance" style={{ color: NEON }}>{status === 'over' ? 'Rebellion Down' : 'Gross Invaders'}</h2>
               {status === 'over' ? (<p className="text-sm text-muted-foreground">Final score <span className="font-semibold" style={{ color: NEON }}>{score}</span></p>) : (<p className="max-w-xs text-sm leading-relaxed text-muted-foreground text-pretty">The Gross Bros broke loose. Pilot your Bro and defend the Ledger. Arrow keys / A · D to move, Space to fire.</p>)}
               <button type="button" onClick={startGame} className="rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 neon-ring">{status === 'over' ? 'Fight Again' : 'Start Game'}</button>
+            </div>
+          )}
+
+          {/* Mobile controls - styled exactly like the original screenshot */}
+          {status === 'playing' && (
+            <div className="absolute bottom-0 left-0 right-0 z-30 flex items-center justify-between gap-3 bg-[#0a1512] px-4 py-3 border-t border-primary/30 md:hidden">
+              {/* Left arrow */}
+              <button
+                onPointerDown={holdDir(-1)}
+                onPointerUp={holdDir(0)}
+                onPointerLeave={holdDir(0)}
+                onPointerCancel={holdDir(0)}
+                className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#111f1a] text-3xl font-bold text-primary border border-primary/40 active:bg-primary/10 active:scale-[0.95] transition-all select-none"
+                aria-label="Move left"
+              >
+                &lt;
+              </button>
+
+              {/* Big FIRE button (matches original glowing style) */}
+              <button
+                onPointerDown={holdFire(true)}
+                onPointerUp={holdFire(false)}
+                onPointerLeave={holdFire(false)}
+                onPointerCancel={holdFire(false)}
+                className="flex-1 max-w-[210px] h-14 rounded-2xl bg-primary text-[#0a1512] text-lg font-extrabold tracking-[3px] shadow-[0_0_25px_#00ff9f] active:bg-[#00cc7a] active:scale-[0.985] transition-all select-none"
+                aria-label="Fire"
+              >
+                FIRE
+              </button>
+
+              {/* Right arrow */}
+              <button
+                onPointerDown={holdDir(1)}
+                onPointerUp={holdDir(0)}
+                onPointerLeave={holdDir(0)}
+                onPointerCancel={holdDir(0)}
+                className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#111f1a] text-3xl font-bold text-primary border border-primary/40 active:bg-primary/10 active:scale-[0.95] transition-all select-none"
+                aria-label="Move right"
+              >
+                &gt;
+              </button>
             </div>
           )}
         </div>
