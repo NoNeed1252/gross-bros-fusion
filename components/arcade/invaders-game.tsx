@@ -577,10 +577,12 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
               <button type="button" onClick={startGame} className="rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 neon-ring">{status === 'over' ? 'Fight Again' : 'Start Game'}</button>
             </div>
           )}
+        </div>
 
-          {/* Mobile controls - styled exactly like the original screenshot */}
-          {status === 'playing' && (
-            <div className="absolute bottom-0 left-0 right-0 z-30 flex items-center justify-between gap-3 bg-[#0a1512] px-4 py-3 border-t border-primary/30 md:hidden">
+        {/* Mobile controls placed BELOW the game so the spaceship is fully visible */}
+        {status === 'playing' && (
+          <div className="md:hidden px-4 py-3 bg-[#0a1512] border-t border-primary/30 rounded-b-2xl">
+            <div className="flex items-center justify-between gap-3">
               {/* Left arrow */}
               <button
                 onPointerDown={holdDir(-1)}
@@ -593,7 +595,7 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
                 &lt;
               </button>
 
-              {/* Big FIRE button (matches original glowing style) */}
+              {/* Big glowing FIRE button */}
               <button
                 onPointerDown={holdFire(true)}
                 onPointerUp={holdFire(false)}
@@ -617,8 +619,8 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
                 &gt;
               </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   )
