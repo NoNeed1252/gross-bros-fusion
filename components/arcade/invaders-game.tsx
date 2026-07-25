@@ -10,12 +10,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GrossBro } from '@/lib/gross-bros'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+let supabase: SupabaseClient | null = null
+
+// Only create Supabase client if env vars exist (prevents crash on deploy)
+if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  )
+}
 
 const GAME_W = 640
 const GAME_H = 560
@@ -164,26 +169,27 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
     setStatus('over')
     setBest((b) => Math.max(b, scoreRef.current))
 
-    // Supabase leaderboard submission (fire-and-forget, non-blocking)
-    const walletAddress =
-      bro?.owner || localStorage.getItem('wallet_address') || 'Anonymous'
+    // Supabase leaderboard (only runs if env vars are set)
+    if (supabase) {
+      const walletAddress =
+        bro?.owner || localStorage.getItem('wallet_address') || 'Anonymous'
 
-    supabase
-      .from('leaderboard')
-      .insert({
-        wallet_address: walletAddress,
-        score: scoreRef.current,
-        wave: waveRef.current,
-      })
-      .then(({ error }) => {
-        if (error) {
-          console.error('Leaderboard insert error:', error)
-        } else {
-          console.log('Leaderboard entry submitted for', walletAddress)
-        }
-      })
+      supabase
+        .from('leaderboard')
+        .insert({
+          wallet_address: walletAddress,
+          score: scoreRef.current,
+          wave: waveRef.current,
+        })
+        .then(({ error }) => {
+          if (error) {
+            console.error('Leaderboard insert error:', error)
+          } else {
+            console.log('Leaderboard entry submitted for', walletAddress)
+          }
+        })
+    }
 
-    // Notify High Score
     if (scoreRef.current > 0) {
       console.log('Final Score:', scoreRef.current, 'for address:', bro?.owner)
     }
@@ -251,7 +257,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       const bx = b.x
       const by = b.y
       ctx.beginPath()
-      // Mobile‑Safari compatibility: use rect() if roundRect() is unavailable
       if (typeof (ctx as any).roundRect === 'function') {
         ctx.roundRect(bx, by, BARRIER_W, BARRIER_H, 4)
       } else {
@@ -274,7 +279,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       drawEnemy(ctx, inv.x, inv.y, inv.type, stepCount)
     }
 
-    // Power-ups
     for (const pu of s.powerups) {
       ctx.fillStyle = POWERUP_COLORS[pu.type]
       ctx.beginPath()
@@ -286,13 +290,11 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       ctx.fillText(pu.type[0].toUpperCase(), pu.x + POWERUP_SIZE/2, pu.y + POWERUP_SIZE/2 + 4)
     }
 
-    // Player
     const px = s.playerX
     const py = PLAYER_Y
     const pw = PLAYER_W
     const ph = PLAYER_H
 
-    // Animated Thrusters
     const tTime = Date.now() / 50
     ctx.strokeStyle = s.activeSpeed > 0 ? POWERUP_COLORS.speed : NEON
     ctx.lineWidth = 1.5
@@ -318,30 +320,26 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       ctx.fill()
     }
 
-    // Gorgeous Spaceship Chassis
     const shipColor = s.activeSpeed > 0 ? POWERUP_COLORS.speed : NEON
     ctx.strokeStyle = shipColor
     ctx.lineWidth = 2
     ctx.lineJoin = 'round'
     
-    // 1. Wings & Body Base
     ctx.beginPath()
-    ctx.moveTo(px + pw/2, py + 4) // Center Front
-    ctx.lineTo(px + pw + 8, py + ph - 8) // Right Wing Tip
-    ctx.lineTo(px + pw * 0.7, py + ph + 2) // Right Rear
-    ctx.lineTo(px + pw * 0.3, py + ph + 2) // Left Rear
-    ctx.lineTo(px - 8, py + ph - 8) // Left Wing Tip
+    ctx.moveTo(px + pw/2, py + 4)
+    ctx.lineTo(px + pw + 8, py + ph - 8)
+    ctx.lineTo(px + pw * 0.7, py + ph + 2)
+    ctx.lineTo(px + pw * 0.3, py + ph + 2)
+    ctx.lineTo(px - 8, py + ph - 8)
     ctx.closePath()
     ctx.stroke()
 
-    // 2. Chassis Detail Lines
     ctx.lineWidth = 1
     ctx.beginPath()
     ctx.moveTo(px + pw * 0.2, py + ph * 0.7); ctx.lineTo(px + pw * 0.8, py + ph * 0.7)
     ctx.moveTo(px + pw * 0.5, py + ph + 2); ctx.lineTo(px + pw * 0.5, py + py * 0.7)
     ctx.stroke()
 
-    // 3. Compact Pilot Cockpit (Seamless Integration)
     const cockpitSize = 26
     const cx = px + (pw - cockpitSize) / 2
     const cy = py + 6
@@ -355,14 +353,12 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       ctx.drawImage(pimg, cx, cy, cockpitSize, cockpitSize)
       ctx.restore()
       
-      // Pilot Canopy Frame
       ctx.strokeStyle = shipColor
       ctx.lineWidth = 1.5
       ctx.beginPath()
       ctx.arc(cx + cockpitSize/2, cy + cockpitSize/2, cockpitSize/2, 0, Math.PI * 2)
       ctx.stroke()
 
-      // Glass shine highlight
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'
       ctx.lineWidth = 1
       ctx.beginPath()
@@ -460,7 +456,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
         }
       }
 
-      // Power-up movement and collection
       s.powerups = s.powerups.filter(pu => pu.y < GAME_H + 20)
       for (const pu of s.powerups) {
         pu.y += POWERUP_SPEED
@@ -480,7 +475,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
             b.y = -100
             scoreRef.current += 15
             setScore(scoreRef.current)
-            // Power-up Drop Chance
             if (Math.random() < 0.15) {
               const types: PowerUpType[] = ['shield', 'double', 'speed']
               s.powerups.push({
@@ -604,11 +598,10 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
           )}
         </div>
 
-        {/* Mobile controls placed BELOW the game so the spaceship is fully visible */}
+        {/* Mobile controls below the game */}
         {status === 'playing' && (
           <div className="md:hidden px-4 py-3 bg-[#0a1512] border-t border-primary/30 rounded-b-2xl">
             <div className="flex items-center justify-between gap-3">
-              {/* Left arrow */}
               <button
                 onPointerDown={holdDir(-1)}
                 onPointerUp={holdDir(0)}
@@ -620,7 +613,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
                 &lt;
               </button>
 
-              {/* Big glowing FIRE button */}
               <button
                 onPointerDown={holdFire(true)}
                 onPointerUp={holdFire(false)}
@@ -632,7 +624,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
                 FIRE
               </button>
 
-              {/* Right arrow */}
               <button
                 onPointerDown={holdDir(1)}
                 onPointerUp={holdDir(0)}
