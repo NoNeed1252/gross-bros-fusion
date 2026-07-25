@@ -226,7 +226,12 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
       const bx = b.x
       const by = b.y
       ctx.beginPath()
-      ctx.roundRect(bx, by, BARRIER_W, BARRIER_H, 4)
+      // Mobile‑Safari compatibility: use rect() if roundRect() is unavailable
+      if (typeof (ctx as any).roundRect === 'function') {
+        ctx.roundRect(bx, by, BARRIER_W, BARRIER_H, 4)
+      } else {
+        ctx.rect(bx, by, BARRIER_W, BARRIER_H)
+      }
       ctx.fill()
       ctx.stroke()
       if (b.health < 8) {
