@@ -579,7 +579,6 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
           )}
         </div>
       </div>
-      <Leaderboard />
     </div>
   )
 }
