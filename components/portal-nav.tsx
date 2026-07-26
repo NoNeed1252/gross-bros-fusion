@@ -1,122 +1,99 @@
 'use client'
 
-import { MessageSquare, Wallet, Gamepad2, Radio } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { MessageSquare, Wallet, Gamepad2, Bot } from 'lucide-react'
 
-export type TabId = 'chat' | 'wallet' | 'arcade'
-
-export const TABS: { id: TabId; label: string; icon: typeof MessageSquare }[] = [
-  { id: 'chat', label: 'Chat', icon: MessageSquare },
-  { id: 'wallet', label: 'Wallet', icon: Wallet },
-  { id: 'arcade', label: 'Arcade', icon: Gamepad2 },
-]
-
-function BroMark() {
-  return (
-    <div className="flex items-center gap-2.5">
-      <div className="relative grid size-9 place-items-center rounded-xl bg-primary/10 neon-border">
-        <div className="size-3.5 rounded-full bg-primary neon-ring" />
-      </div>
-      <div className="leading-none">
-        <p className="font-mono text-[10px] tracking-[0.25em] text-muted-foreground">
-          XRP-7 · REBELLION
-        </p>
-        <p className="text-sm font-bold tracking-tight text-foreground">
-          FUSION<span className="text-primary text-glow">PORTAL</span>
-        </p>
-      </div>
-    </div>
-  )
+interface PortalNavProps {
+  activeTab: string
+  setActiveTab: (tab: string) => void
+  connected: boolean
+  xrpBalance: string
 }
 
-/* Desktop top-bar navigation */
-export function PortalHeader({
-  active,
-  onChange,
-}: {
-  active: TabId
-  onChange: (id: TabId) => void
-}) {
-  return (
-    <header className="sticky top-0 z-30 border-b border-border/60 bg-background/70 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 md:px-8">
-        <BroMark />
+export function PortalNav({
+  activeTab,
+  setActiveTab,
+  connected,
+  xrpBalance
+}: PortalNavProps) {
+  const tabs = [
+    { id: 'chat', label: 'Tactical AI', icon: MessageSquare },
+    { id: 'wallet', label: 'Holder Wallet', icon: Wallet },
+    { id: 'trade', label: 'Trade Bot', icon: Bot },
+    { id: 'arcade', label: 'Arcade', icon: Gamepad2 }
+  ]
 
-        {/* Desktop tabs */}
-        <nav className="hidden items-center gap-1 rounded-full border border-border/70 bg-card/50 p-1 md:flex">
-          {TABS.map((tab) => {
+  return (
+    
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+        {/* Brand Header */}
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 font-black text-zinc-100">
+            CCC
+          
+          <div>
+            <h1 className="text-sm font-bold uppercase tracking-wider text-zinc-100">
+              The Combat Chimps
+            
+            <p className="text-[10px] font-medium tracking-widest text-zinc-400">
+              TACTICAL PORTAL // SECTOR-7
+            
+          
+        
+
+        {/* Desktop Navigation */}
+        <nav className="hidden md:flex items-center gap-1 rounded-xl border border-zinc-800 bg-zinc-900/60 p-1">
+          {tabs.map((tab) => {
             const Icon = tab.icon
-            const isActive = active === tab.id
+            const isActive = activeTab === tab.id
             return (
               <button
                 key={tab.id}
-                type="button"
-                onClick={() => onChange(tab.id)}
-                aria-current={isActive ? 'page' : undefined}
-                className={cn(
-                  'flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all',
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
                   isActive
-                    ? 'bg-primary text-primary-foreground neon-ring'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
+                    ? 'border border-zinc-700 bg-zinc-800 text-zinc-100'
+                    : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
+                }`}
               >
-                <Icon className="size-4" />
+                <Icon className="h-4 w-4" />
                 {tab.label}
-              </button>
+              
             )
           })}
-        </nav>
+        
 
-        <div className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5">
-          <Radio className="size-3.5 text-primary" />
-          <span className="hidden font-mono text-[11px] tracking-wider text-primary sm:inline">
-            NET ONLINE
-          </span>
-          <span className="size-2 rounded-full bg-primary pulse-dot" />
-        </div>
-      </div>
-    </header>
-  )
-}
+        {/* Right Balance Badge */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-zinc-300">
+            <span className={h-2 w-2 rounded-full ${connected ? 'bg-emerald-400' : 'bg-zinc-600'}} />
+            <span>{connected ? ${xrpBalance} XRP : 'Offline'}
+          
+        
+      
 
-/* Mobile bottom navigation bar */
-export function PortalBottomNav({
-  active,
-  onChange,
-}: {
-  active: TabId
-  onChange: (id: TabId) => void
-}) {
-  return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border/60 bg-background/85 backdrop-blur-xl md:hidden">
-      <div className="mx-auto flex max-w-md items-stretch justify-around px-2 py-2">
-        {TABS.map((tab) => {
-          const Icon = tab.icon
-          const isActive = active === tab.id
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => onChange(tab.id)}
-              aria-current={isActive ? 'page' : undefined}
-              className={cn(
-                'flex flex-1 flex-col items-center gap-1 rounded-xl py-1.5 text-[11px] font-medium transition-all',
-                isActive ? 'text-primary' : 'text-muted-foreground',
-              )}
-            >
-              <span
-                className={cn(
-                  'grid size-9 place-items-center rounded-xl transition-all',
-                  isActive && 'bg-primary/10 neon-border',
-                )}
+      {/* Mobile Bottom Navigation Bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-zinc-800 bg-zinc-950/95 p-2 backdrop-blur-lg md:hidden">
+        <div className="grid grid-cols-4 gap-1">
+          {tabs.map((tab) => {
+            const Icon = tab.icon
+            const isActive = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex flex-col items-center justify-center rounded-lg py-2 transition-all ${
+                  isActive
+                    ? 'border border-zinc-700 bg-zinc-800 text-zinc-100'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
               >
-                <Icon className={cn('size-5', isActive && 'text-glow')} />
-              </span>
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
-    </nav>
+                <Icon className="h-5 w-5" />
+                <span className="mt-1 text-[10px] font-semibold">{tab.label}
+              
+            )
+          })}
+        
+      
+    
   )
 }
