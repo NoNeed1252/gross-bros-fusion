@@ -1,6 +1,6 @@
 'use client'
 
-import { MessageSquare, Wallet, Gamepad2, Bot } from 'lucide-react'
+import { Bot, Gamepad2, MessageSquare, Wallet } from 'lucide-react'
 
 interface PortalNavProps {
   activeTab: string
@@ -31,7 +31,7 @@ export function PortalNav({
               CCC
             
 
-            <div>
+            
               <h1 className="text-sm font-bold uppercase tracking-wider text-zinc-100">
                 The Combat Chimps
               
@@ -41,7 +41,7 @@ export function PortalNav({
             
           
 
-          <nav className="hidden items-center gap-1 rounded-xl border border-zinc-800 bg-zinc-900/60 p-1 md:flex">
+          
             {tabs.map((tab) => {
               const Icon = tab.icon
               const isActive = activeTab === tab.id
@@ -63,7 +63,7 @@ export function PortalNav({
             })}
           
 
-          <div className="hidden items-center gap-2 md:flex">
+          
             <div className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-zinc-300">
               <span
                 className={`h-2 w-2 rounded-full ${
