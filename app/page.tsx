@@ -169,7 +169,7 @@ export default function Page() {
             }}
           />
         )}
-        {tab === 'trade' && <TradeTab bro={bro} />}
+        {tab === 'trade' && <TradeTab mainAddress={address} mainBalance={xrpBalance} connected={connected} />}
         {tab === 'arcade' && <ArcadeTab bro={bro} />}
       </main>
       <PortalFooter />
