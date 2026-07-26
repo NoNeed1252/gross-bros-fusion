@@ -8,7 +8,7 @@ interface TradeTabProps {
   connected: boolean;
 }
 
-export default function TradeTab({ mainAddress, mainBalance, connected }: TradeTabProps) {
+export function TradeTab({ mainAddress, mainBalance, connected }: TradeTabProps) {
   const [activated, setActivated] = useState<boolean>(false);
   const [loadingPayload, setLoadingPayload] = useState<boolean>(false);
   const [payloadId, setPayloadId] = useState<string | null>(null);
@@ -154,3 +154,5 @@ export default function TradeTab({ mainAddress, mainBalance, connected }: TradeT
     </div>
   );
 }
+
+export default TradeTab;
