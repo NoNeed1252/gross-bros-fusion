@@ -11,20 +11,38 @@ export async function POST(request: Request) {
     );
   }
 
-  const payload = {
-    txjson: {
-      TransactionType: 'SignIn'
-    }
-  };
+  let body: any = {};
+  try {
+    body = await request.json();
+  } catch {
+    // ignore parse errors, default to signin
+  }
+
+  const type = body?.type === 'payment' ? 'payment' : 'signin';
+
+  const txjson: any =
+    type === 'payment'
+      ? {
+          TransactionType: 'Payment',
+          Destination:
+            process.env.XAMAN_TREASURY_ADDRESS ||
+            'rG1QQv2nh2grL33zpS3pBAnr58844f25p2',
+          Amount: '36000000', // 36 XRP in drops
+        }
+      : {
+          TransactionType: 'SignIn',
+        };
+
+  const payload = { txjson };
 
   const response = await fetch('https://xumm.app/api/v1/platform/payload', {
     method: 'POST',
     headers: {
       'x-api-key': apiKey,
       'x-api-secret': apiSecret,
-      'content-type': 'application/json'
+      'content-type': 'application/json',
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 
   const data = await response.json();
@@ -38,6 +56,6 @@ export async function POST(request: Request) {
     uuid: data.uuid,
     qr_png: data.refs?.qr_png,
     deeplink: data.next?.always || data.refs?.deeplink || `xumm://sign/${data.uuid}`,
-    always: data.next?.always
+    always: data.next?.always,
   });
 }
