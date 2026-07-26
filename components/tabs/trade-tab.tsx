@@ -17,6 +17,7 @@ export default function TradeTab({ mainAddress, mainBalance, connected }: TradeT
   const [verifying, setVerifying] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Load activation state from localStorage on mount
   useEffect(() => {
     const isAct = localStorage.getItem('tgb_masterstroke_activated') === 'true';
     if (isAct) {
@@ -24,6 +25,7 @@ export default function TradeTab({ mainAddress, mainBalance, connected }: TradeT
     }
   }, []);
 
+  // Create a payload for the $20 USD activation via Xaman
   const handleCreatePayload = async () => {
     if (!connected || !mainAddress) {
       setErrorMessage('Connect Xaman Wallet first');
@@ -49,28 +51,28 @@ export default function TradeTab({ mainAddress, mainBalance, connected }: TradeT
       const data = await res.json();
       if (data.payload_id) {
         setPayloadId(data.payload_id);
-        setQrUrl(data.qr_png || null);
-        setDeepLink(data.next_url || null);
+        setQrUrl(data.qr_png ?? null);
+        setDeepLink(data.next_url ?? null);
       } else {
         throw new Error('Invalid response from Xaman API');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Error initializing paywall');
+      setErrorMessage(err.message ?? 'Error initializing paywall');
     } finally {
       setLoadingPayload(false);
     }
   };
 
+  // Verify the payment once the user has signed in Xaman
   const handleVerifyPayment = async () => {
     if (!payloadId) return;
     setVerifying(true);
     setErrorMessage(null);
     try {
-      const res = await fetch(/api/xaman/verify?payload_id=${payloadId});
+      const res = await fetch(`/api/xaman/verify?payload_id=${payloadId}`);
       if (!res.ok) {
         throw new Error('Verification request failed');
       }
-
       const data = await res.json();
       if (data.signed || data.verified) {
         localStorage.setItem('tgb_masterstroke_activated', 'true');
@@ -79,26 +81,26 @@ export default function TradeTab({ mainAddress, mainBalance, connected }: TradeT
         setErrorMessage('Payment signature not detected yet. Please sign in Xaman.');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Error verifying payload signature');
+      setErrorMessage(err.message ?? 'Error verifying payload signature');
     } finally {
       setVerifying(false);
     }
   };
 
+  // UI when not yet activated
   if (!activated) {
     return (
-      
-        <h2 className="text-xl font-bold text-white mb-2">Tactical Masterstroke Engine
+      <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
+        <h2 className="text-xl font-bold text-white mb-2">Tactical Masterstroke Engine</h2>
         <p className="text-sm text-zinc-400 mb-6">
-          Activation required. Submit $20 USD authorization via Xaman to unlock persistent local vault trading
-        
-
+          Activation required. Submit $20 USD authorization via Xaman to unlock persistent local vault trading.
+        </p>
         {!connected ? (
           <div className="w-full p-3 bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs rounded-lg mb-4">
             Connect Xaman Wallet First
-          
+          </div>
         ) : (
-          
+          <>
             {!payloadId ? (
               <button
                 onClick={handleCreatePayload}
@@ -106,13 +108,12 @@ export default function TradeTab({ mainAddress, mainBalance, connected }: TradeT
                 className="w-full py-3 px-4 bg-white text-black font-semibold text-sm rounded-lg hover:bg-zinc-200 transition-colors disabled:opacity-50"
               >
                 {loadingPayload ? 'Generating Payload...' : 'Pay $20 USD via Xaman'}
-              
+              </button>
             ) : (
               <div className="w-full flex flex-col items-center gap-4 border-t border-zinc-800 pt-4">
                 {qrUrl && (
                   <img src={qrUrl} alt="Xaman Payload QR" className="w-48 h-48 border border-zinc-700 rounded-lg" />
                 )}
-
                 {deepLink && (
                   <a
                     href={deepLink}
@@ -121,38 +122,35 @@ export default function TradeTab({ mainAddress, mainBalance, connected }: TradeT
                     className="w-full py-3 px-4 bg-zinc-800 text-white font-medium text-sm rounded-lg text-center hover:bg-zinc-700 transition-colors"
                   >
                     Open in Xaman App
-                  
+                  </a>
                 )}
-
                 <button
                   onClick={handleVerifyPayment}
                   disabled={verifying}
                   className="w-full py-3 px-4 bg-white text-black font-semibold text-sm rounded-lg hover:bg-zinc-200 transition-colors disabled:opacity-50"
                 >
                   {verifying ? 'Verifying Signature...' : 'Verify Payment'}
-                
-              
+                </button>
+              </div>
             )}
-          
+          </>
         )}
-
         {errorMessage && (
-          
+          <div className="mt-4 text-sm text-red-400">
             {errorMessage}
-          
+          </div>
         )}
-      
+      </div>
     );
   }
 
+  // UI when activated
   return (
-    
-      <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl">
-        <h3 className="text-lg font-bold text-white mb-1">Masterstroke Control Active
-        <p className="text-xs text-zinc-400">
-          Connected: {mainAddress ? ${mainAddress.slice(0, 6)}...${mainAddress.slice(-4)} : 'N/A'}
-        
-      
-    
+    <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl">
+      <h3 className="text-lg font-bold text-white mb-1">Masterstroke Control Active</h3>
+      <p className="text-xs text-zinc-400">
+        Connected: {mainAddress ? `${mainAddress.slice(0, 6)}...${mainAddress.slice(-4)}` : 'N/A'}
+      </p>
+    </div>
   );
 }
