@@ -5,6 +5,7 @@ import { PortalHeader, PortalBottomNav, type TabId } from '@/components/portal-n
 import { PortalFooter } from '@/components/portal-footer'
 import { ChatTab } from '@/components/tabs/chat-tab'
 import { WalletTab } from '@/components/tabs/wallet-tab'
+import { TradeTab } from '@/components/tabs/trade-tab'
 import { ArcadeTab } from '@/components/tabs/arcade-tab'
 import { GROSS_BROS_LITE, resolveBro, type GrossBro } from '@/lib/gross-bros'
 
@@ -138,7 +139,12 @@ export default function Page() {
   return (
     <div className="portal-bg relative flex min-h-dvh flex-col">
       <div className="grid-overlay pointer-events-none absolute inset-0 h-[420px]" aria-hidden />
-      <PortalHeader active={tab} onChange={setTab} />
+      <PortalHeader
+        activeTab={tab}
+        setActiveTab={setTab}
+        connected={connected}
+        xrpBalance={xrpBalance}
+      />
       <main className="relative z-10 flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-10">
         {tab === 'chat' && (
           <ChatTab 
@@ -163,10 +169,11 @@ export default function Page() {
             }}
           />
         )}
+        {tab === 'trade' && <TradeTab bro={bro} />}
         {tab === 'arcade' && <ArcadeTab bro={bro} />}
       </main>
       <PortalFooter />
-      <PortalBottomNav active={tab} onChange={setTab} />
+      <PortalBottomNav activeTab={tab} setActiveTab={setTab} />
     </div>
   )
 }
