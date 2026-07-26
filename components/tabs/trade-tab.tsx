@@ -1,126 +1,94 @@
 'use client';
 
-import React, { useState, useEffect } from "react";
-import Image from "next/image";
+import React, { useEffect, useState } from 'react';
+import { Wallet, Client, generateSeed } from 'xrpl';
 
 interface TradeTabProps {
-  user?: any;
   connected?: boolean;
   mainAddress?: string;
   mainBalance?: string;
 }
 
-export function TradeTab({ user, connected, mainAddress, mainBalance }: TradeTabProps) {
-  // Vault seed persisted in localStorage
-  const [vaultSeed, setVaultSeed] = useState<string>("");
-  const [engineRunning, setEngineRunning] = useState<boolean>(false);
+export function TradeTab({ connected, mainAddress, mainBalance }: TradeTabProps) {
+  const [seed, setSeed] = useState<string>('');
+  const [address, setAddress] = useState<string>('');
+  const [balance, setBalance] = useState<string>(mainBalance ?? '0');
+  const [cccAuth, setCccAuth] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  // Strategy controls (placeholders for now)
-  const [gridStrategy, setGridStrategy] = useState<string>("");
-  const [upperBand, setUpperBand] = useState<string>("");
-  const [lowerBand, setLowerBand] = useState<string>("");
-  const [stopLoss, setStopLoss] = useState<string>("");
-  const [takeProfit, setTakeProfit] = useState<string>("");
-
-  // Initialise vault seed from localStorage
+  // Initialise or create burner seed
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedSeed = localStorage.getItem("tgb_masterstroke_vault_seed");
-      if (storedSeed) {
-        setVaultSeed(storedSeed);
-      } else {
-        const newSeed = Math.random().toString(36).substring(2, 15);
-        localStorage.setItem("tgb_masterstroke_vault_seed", newSeed);
-        setVaultSeed(newSeed);
-      }
+    if (typeof window === 'undefined') return;
+    let stored = localStorage.getItem('burner_wallet_seed');
+    if (!stored) {
+      stored = generateSeed();
+      localStorage.setItem('burner_wallet_seed', stored);
     }
+    setSeed(stored);
   }, []);
 
-  const handleSweep = async () => {
+  // Derive address from seed
+  useEffect(() => {
+    if (!seed) return;
     try {
-      await fetch("/api/sweep", { method: "POST" });
-      alert("Sweep request sent");
+      const wallet = Wallet.fromSeed(seed);
+      setAddress(wallet.classicAddress);
     } catch (e) {
-      console.error(e);
-      alert("Sweep failed");
+      console.error('Failed to derive address', e);
     }
-  };
+  }, [seed]);
 
-  const handleEngineToggle = () => {
-    setEngineRunning(!engineRunning);
-  };
+  // Fetch balance and CCC NFT status
+  useEffect(() => {
+    if (!address) return;
+    const client = new Client('wss://s.altnet.rippletest.net:51233');
+    client.connect()
+      .then(async () => {
+        const info = await client.request({
+          command: 'account_info',
+          account: address,
+          ledger_index: 'validated',
+        });
+        const drops = info.result.account_data.Balance;
+        const xrp = (Number(drops) / 1_000_000).toFixed(6);
+        setBalance(xrp);
+        // Check for CCC NFT (placeholder: look for NFT with Issuer "ccc" if present)
+        const nfts = await client.request({
+          command: 'account_nfts',
+          account: address,
+        });
+        const hasCcc = nfts.result.account_nfts?.some((n: any) => n.Issuer?.toLowerCase().includes('ccc')) ?? false;
+        setCccAuth(hasCcc);
+      })
+      .catch((e) => console.error('XRPL client error', e))
+      .finally(() => {
+        setLoading(false);
+        client.disconnect();
+      });
+  }, [address]);
 
-  // Render ---------------------------------------------------------------
+  const fundLink = 'https://xaman.app/deposit'; // placeholder link for Xaman deposit QR
+
   return (
-    <div className="p-4 border border-zinc-800/80 bg-zinc-950 text-white">
-      <h1 className="text-2xl font-bold mb-2">Masterstroke Control Center</h1>
-      <p className="mb-2">Burner Vault Seed: {vaultSeed}</p>
-      <p className="mb-2">Vault Balance: --</p>
-      <button
-        onClick={handleSweep}
-        className="mb-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded"
-      >
-        Sweep Funds to Main Wallet
-      </button>
-      <div className="grid grid-cols-1 gap-4">
-        <label>
-          Grid Strategy:
-          <select
-            value={gridStrategy}
-            onChange={e => setGridStrategy(e.target.value)}
-            className="ml-2 p-1 border border-zinc-800 bg-zinc-900 text-white"
+    <div className="bg-zinc-950 border border-zinc-800 text-white p-4">
+      <h2 className="text-xl font-semibold mb-2">Burner Wallet Portal</h2>
+      {loading ? (
+        <p>Loading wallet information…</p>
+      ) : (
+        <>
+          <p className="mb-1"><strong>Address:</strong> {address}</p>
+          <p className="mb-1"><strong>Balance:</strong> {balance} XRP</p>
+          <p className="mb-3"><strong>CCC NFT Authorized:</strong> {cccAuth ? 'Yes' : 'No'}</p>
+          <a
+            href={fundLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded"
           >
-            <option value="">Select…</option>
-            <option value="basic">Basic</option>
-            <option value="advanced">Advanced</option>
-          </select>
-        </label>
-        <label>
-          Upper Band:
-          <input
-            type="number"
-            value={upperBand}
-            onChange={e => setUpperBand(e.target.value)}
-            className="ml-2 p-1 border border-zinc-800 bg-zinc-900 text-white"
-          />
-        </label>
-        <label>
-          Lower Band:
-          <input
-            type="number"
-            value={lowerBand}
-            onChange={e => setLowerBand(e.target.value)}
-            className="ml-2 p-1 border border-zinc-800 bg-zinc-900 text-white"
-          />
-        </label>
-        <label>
-          Stop Loss (%):
-          <input
-            type="number"
-            value={stopLoss}
-            onChange={e => setStopLoss(e.target.value)}
-            className="ml-2 p-1 border border-zinc-800 bg-zinc-900 text-white"
-          />
-        </label>
-        <label>
-          Take Profit (%):
-          <input
-            type="number"
-            value={takeProfit}
-            onChange={e => setTakeProfit(e.target.value)}
-            className="ml-2 p-1 border border-zinc-800 bg-zinc-900 text-white"
-          />
-        </label>
-        <div className="flex items-center">
-          <span className="mr-2">Engine:</span>
-          <button
-            onClick={handleEngineToggle}
-            className={`px-4 py-2 rounded ${engineRunning ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"}`}
-          >
-            {engineRunning ? "Pause" : "Start"}
-          </button>
-        </div>
-      </div>
+            Fund via Xaman
+          </a>
+        </>
+      )}
     </div>
   );
 }
