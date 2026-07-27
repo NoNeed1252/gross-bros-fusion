@@ -6,7 +6,6 @@ import { PortalFooter } from '@/components/portal-footer'
 import { ChatTab } from '@/components/tabs/chat-tab'
 import { WalletTab } from '@/components/tabs/wallet-tab'
 import { ArcadeTab } from '@/components/tabs/arcade-tab'
-import { TradeTab } from '@/components/tabs/trade-tab'
 import { GROSS_BROS_LITE, resolveBro, type GrossBro } from '@/lib/gross-bros'
 
 export default function Page() {
@@ -170,13 +169,6 @@ export default function Page() {
           />
         )}
         {tab === 'arcade' && <ArcadeTab bro={bro} />}
-        {tab === 'trade' && (
-          <TradeTab 
-            connected={connected}
-            mainAddress={address}
-            mainBalance={xrpBalance}
-          />
-        )}
       </main>
       <PortalFooter />
       <PortalBottomNav activeTab={tab} setActiveTab={setTab} />
