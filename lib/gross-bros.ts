@@ -1,7 +1,6 @@
 /**
  * Galactic Gross Bros — real collection data + per-NFT personalities.
  */
-
 export const COLLECTION = {
   name: 'Galactic Gross Bros',
   issuer: 'rP1wMvanhfmsm7Af4FcHvSvfhash43LWSY',
@@ -15,7 +14,6 @@ export const COLLECTION = {
 } as const
 
 export type Trait = { type: string; value: string }
-
 export type GrossBro = {
   tokenId: string
   name: string
@@ -30,7 +28,8 @@ export type GrossBro = {
   demoReplies: string[]
 }
 
-export const PERSONALITY_TRAITS: Record<string, { species: string, prompt: string, replies: string[] }> = {
+// Personality traits mapping for each species. The specific type is omitted for brevity.
+export const PERSONALITY_TRAITS = {
   'Ooze': {
     species: 'Ooze-Class Rebel',
     prompt: 'You are a high-energy, slime-dripping Ooze rebel who views the XRP Ledger as one giant casino. Use heavy crypto slang (NGMI, LFG, Wagmi) and talk like a degenerate gambler.',
@@ -59,7 +58,7 @@ export const PERSONALITY_TRAITS: Record<string, { species: string, prompt: strin
   'Sludge': {
     species: 'Sludge Mechanic',
     prompt: 'You are a grease-covered Sludge mechanic obsessed with the plumbing of the XRPL. Use technical, practical language and mechanical metaphors.',
-    replies: ['The pipes are clogged with sell orders.', 'I\'ll slime this trade back together.']
+    replies: ['The pipes are clogged with sell orders.', "I'll slime this trade back together."]
   },
   'Vapor': {
     species: 'Vapor Entity',
@@ -82,7 +81,6 @@ export const PERSONALITY_TRAITS: Record<string, { species: string, prompt: strin
     replies: ['I am the standard. The Treasury born.', 'Low-tier tokens are beneath us.']
   }
 }
-
 export const GROSS_BROS_LITE: GrossBro[] = [
   {
     tokenId: '86',
@@ -101,20 +99,12 @@ export const GROSS_BROS_LITE: GrossBro[] = [
     demoReplies: ['Bleh. Markets are dripping green today. Deal with it.'],
   },
 ]
-
 // Restore GROSS_BROS alias for Arcade/Invaders compat
 export const GROSS_BROS = GROSS_BROS_LITE;
-
 export function getDeterministicStats(tokenId: string) {
   const n = parseInt(tokenId) || 0
-  return {
-    chaos: 40 + (n % 60),
-    slime: 50 + ((n * 7) % 50),
-    loyalty: 60 + ((n * 13) % 40),
-    degeneracy: 30 + ((n * 17) % 70),
-  }
+  return { chaos: 40 + (n % 60), slime: 50 + ((n * 7) % 50), loyalty: 60 + ((n * 13) % 40), degeneracy: 30 + ((n * 17) % 70) }
 }
-
 /**
  * Universal IPFS to Gateway Link
  */
@@ -124,41 +114,22 @@ export function getIpfsUrl(uri: string): string {
   // Prioritize xrp.cafe/XLS-20 standard gateway for reliability
   return `https://ipfs.io/ipfs/${clean}`
 }
-
 export function resolveBro(rawNft: any): GrossBro {
   const tokenId = parseInt(rawNft.NFTokenID.slice(-8), 16).toString()
   const cached = GROSS_BROS_LITE.find(b => b.tokenId === tokenId)
   if (cached) return cached
-
   const metadata = rawNft.enrichedMetadata || {}
   const attributes = metadata.attributes || []
   const traits: Trait[] = attributes.map((a: any) => ({ type: a.trait_type, value: a.value })) || []
-  
   // Dynamic Personality Mapping
   const speciesTrait = traits.find(t => ['Species', 'Type', 'Class'].includes(t.type))?.value || 'Ooze'
   const personality = PERSONALITY_TRAITS[speciesTrait] || PERSONALITY_TRAITS['Ooze']
-
   const stats = getDeterministicStats(tokenId)
   const name = metadata.name || `Gross Bro #${tokenId}`
-  
   // Resolve image using the helper
   const imageUrl = metadata.image ? getIpfsUrl(metadata.image) : `https://xrp.cafe/ipfs/QmS8P1yXm7S7G3wP5y8Jp4YmZz6Xn8N9K6L7M8R9Q0P1O2/gross-bro-${tokenId}.png`
-
   // Build an immersive system prompt that includes unique traits
   const traitSummary = traits.map(t => `${t.type}: ${t.value}`).join(', ')
   const immersivePrompt = `${personality.prompt} Specifically, you are ${name}. Your unique physical traits are: ${traitSummary}. Your stats are: Chaos ${stats.chaos}, Slime ${stats.slime}, Loyalty ${stats.loyalty}, Degeneracy ${stats.degeneracy}. Keep your unique traits in mind when responding.`
-
-  return {
-    tokenId,
-    name,
-    image: imageUrl,
-    species: personality.species,
-    faction: 'Deep Space Drifters',
-    traits,
-    stats,
-    tagline: 'Surviving the Ledger, one block at a time.',
-    backstory: metadata.description || 'A mysterious survivor of the XRP-7 disaster.',
-    systemPrompt: immersivePrompt,
-    demoReplies: personality.replies
-  }
+  return { tokenId, name, image: imageUrl, species: personality.species, faction: 'Deep Space Drifters', traits, stats, tagline: 'Surviving the Ledger, one block at a time.', backstory: metadata.description || 'A mysterious survivor of the XRP-7 disaster.', systemPrompt: immersivePrompt, demoReplies: personality.replies }
 }
