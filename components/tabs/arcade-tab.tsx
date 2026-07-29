@@ -9,12 +9,15 @@ const InvadersGame = dynamic(
 )
 import { useState, useEffect } from 'react'
 import type { GrossBro } from '@/lib/gross-bros'
+import { getSupabase } from '@/lib/supabase'
 
 interface Score {
-  address: string
+  // The wallet address of the player
+  wallet_address: string
+  // Total score achieved by the player
   score: number
+  // The highest wave the player reached
   wave: number
-  created_at: string
 }
 
 interface ArcadeTabProps {
@@ -25,19 +28,31 @@ export function ArcadeTab({ bro }: ArcadeTabProps) {
   const [leaderboard, setLeaderboard] = useState<Score[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Mock leaderboard for now - in a real app, this would fetch from Supabase
+  // Fetch live leaderboard entries from Supabase on mount
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setLeaderboard([
-        { address: 'r9Gross...Bros1', score: 2450, wave: 8, created_at: new Date().toISOString() },
-        { address: 'rRebel...XRP7', score: 1820, wave: 6, created_at: new Date().toISOString() },
-        { address: 'rLedger...Hero', score: 1540, wave: 5, created_at: new Date().toISOString() },
-        { address: 'rCrypto...King', score: 1200, wave: 4, created_at: new Date().toISOString() },
-        { address: 'rAlpha...Moon', score: 980, wave: 4, created_at: new Date().toISOString() },
-      ])
-      setLoading(false)
-    }, 1000)
-    return () => clearTimeout(timer)
+    const fetchLeaderboard = async () => {
+      try {
+        const supabase = getSupabase()
+        const { data, error } = await supabase
+          .from('leaderboard')
+          .select('wallet_address,score,wave')
+          .order('score', { ascending: false })
+
+        if (error) {
+          console.error('Failed to fetch leaderboard:', error)
+          setLeaderboard([])
+        } else if (data) {
+          setLeaderboard(data as Score[])
+        }
+      } catch (e) {
+        console.error('Unexpected error while fetching leaderboard', e)
+        setLeaderboard([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchLeaderboard()
   }, [])
 
   return (
@@ -94,7 +109,7 @@ export function ArcadeTab({ bro }: ArcadeTabProps) {
                 <div key={i} className="flex items-center justify-between rounded-lg bg-background/40 px-3 py-2">
                   <div className="flex items-center gap-3">
                     <span className="font-mono text-[10px] text-primary/60">#0{i + 1}</span>
-                    <span className="font-mono text-[11px] text-foreground">{s.address}</span>
+                    <span className="font-mono text-[11px] text-foreground">{s.wallet_address}</span>
                   </div>
                   <div className="text-right">
                     <div className="font-mono text-[11px] font-bold text-primary">{s.score}</div>
