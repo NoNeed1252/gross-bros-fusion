@@ -11,6 +11,13 @@ import { useState, useEffect } from 'react'
 import type { GrossBro } from '@/lib/gross-bros'
 import { getSupabase } from '@/lib/supabase'
 
+// Helper to format wallet addresses for display
+const formatWallet = (addr?: string) => {
+  if (!addr || addr === 'Anonymous' || addr === 'Anon') return 'Anon'
+  if (addr.length > 10) return `${addr.slice(0, 4)}...${addr.slice(-4)}`
+  return addr
+}
+
 interface Score {
   // The wallet address of the player
   wallet_address: string
@@ -109,7 +116,7 @@ export function ArcadeTab({ bro }: ArcadeTabProps) {
                 <div key={i} className="flex items-center justify-between rounded-lg bg-background/40 px-3 py-2">
                   <div className="flex items-center gap-3">
                     <span className="font-mono text-[10px] text-primary/60">#0{i + 1}</span>
-                    <span className="font-mono text-[11px] text-foreground">{s.wallet_address}</span>
+                    <span className="font-mono text-[11px] text-foreground">{formatWallet(s.wallet_address)}</span>
                   </div>
                   <div className="text-right">
                     <div className="font-mono text-[11px] font-bold text-primary">{s.score}</div>
