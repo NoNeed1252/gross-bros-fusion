@@ -152,7 +152,7 @@ export function InvadersGame({ bro }: { bro: GrossBro }) {
     setBest((b) => Math.max(b, scoreRef.current))
 
     if (supabase) {
-      const walletAddress = bro?.owner || localStorage.getItem('wallet_address') || 'Anonymous'
+      const walletAddress = bro?.owner || localStorage.getItem('wallet_address') || localStorage.getItem('xaman_wallet') || localStorage.getItem('xaman_address') || 'Anon'
       supabase.from('leaderboard').insert({
         wallet_address: walletAddress,
         score: scoreRef.current,
