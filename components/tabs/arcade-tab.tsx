@@ -106,26 +106,32 @@ export function ArcadeTab({ bro }: ArcadeTabProps) {
             <span className="font-mono text-[9px] text-muted-foreground uppercase">Top Pilots</span>
           </div>
 
-          <div className="space-y-2">
-            {loading ? (
-              <div className="flex h-24 items-center justify-center">
-                <Loader2 className="size-4 animate-spin text-primary/40" />
-              </div>
-            ) : (
-              leaderboard.map((s, i) => (
-                <div key={i} className="flex items-center justify-between rounded-lg bg-background/40 px-3 py-2">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-[10px] text-primary/60">#0{i + 1}</span>
-                    <span className="font-mono text-[11px] text-foreground">{formatWallet(s.wallet_address)}</span>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-mono text-[11px] font-bold text-primary">{s.score}</div>
-                    <div className="font-mono text-[8px] text-muted-foreground uppercase">Wave {s.wave}</div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left py-1">RANK</th>
+                <th className="text-left py-1">PILOT</th>
+                <th className="text-left py-1">WAVE</th>
+                <th className="text-left py-1">SCORE</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={4} className="text-center py-2">Loading...</td>
+                </tr>
+              ) : (
+                leaderboard.map((s, i) => (
+                  <tr key={i} className="border-b">
+                    <td className="py-1">#{i + 1}</td>
+                    <td className="py-1">{formatWallet(s.wallet_address)}</td>
+                    <td className="py-1">{s.wave}</td>
+                    <td className="py-1">{s.score}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
