@@ -233,3 +233,6 @@ export default function InvadersGame({ bro }: { bro?: any }) {
     </div>
   );
 }
+
+// Named export for dynamic import compatibility
+export { InvadersGame };
