@@ -3,13 +3,14 @@
 /**
  * Full-screen Space Invaders implementation for the Gross Bros Fusion arcade.
  * - Canvas size: 640x480 (virtual, scaled to fit container)
- * - Player ship and invaders drawn using 8‑bit pixel matrix sprites.
- * - On‑screen touch controls for mobile (LEFT, RIGHT, FIRE) with zinc style.
- * - No canvas shadows for performance.
+ * - Player ship drawn using an 8‑bit pixel matrix sprite (green).
+ * - Alien sprites are red 8‑bit pixel matrices, 5 rows × 10 columns.
+ * - On‑screen touch controls (LEFT, FIRE, RIGHT) with zinc/charcoal styling.
+ * - No canvas shadows, no CSS box‑shadow for mobile performance.
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase'; // assumed existing supabase client
 
 // Types for leaderboard submission
 interface LeaderboardEntry {
@@ -37,7 +38,7 @@ const BULLET_SPEED = 7;
 const ENEMY_BULLET_SPEED = 4;
 const ENEMY_FIRE_INTERVAL = 1500; // ms
 
-// 8‑bit sprite definitions (1 = pixel on, 0 = off). Scale factor will be applied when drawing.
+// 8‑bit sprite definitions (1 = pixel on, 0 = off). Scale factor applied when drawing.
 const alienSprite: number[][] = [
   [0,0,1,1,1,1,0,0],
   [0,1,1,1,1,1,1,0],
@@ -80,7 +81,8 @@ export default function InvadersGame({ bro }: { bro?: any }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [score, setScore] = useState(0);
   const [wave, setWave] = useState(1);
-  const [lives, setLives] = useState(3);
+  // The reference screenshot shows the player starting with 2 lives.
+  const [lives, setLives] = useState(2);
   const [gameOver, setGameOver] = useState(false);
 
   // Mutable refs – no React re‑renders each frame
@@ -161,7 +163,7 @@ export default function InvadersGame({ bro }: { bro?: any }) {
     bulletsRef.current.push({ x: p.x + PLAYER_WIDTH / 2, y: p.y });
   };
 
-  // Main loop
+  // Main loop – 60fps using requestAnimationFrame
   useEffect(() => {
     const ctx = canvasRef.current?.getContext('2d');
     if (!ctx) return;
@@ -170,18 +172,22 @@ export default function InvadersGame({ bro }: { bro?: any }) {
     const loop = (time: number) => {
       const p = playerRef.current;
       // Keyboard movement
-      if (keys.current['ArrowLeft'] || keys.current['a'] || keys.current['A']) moveLeft();
-      if (keys.current['ArrowRight'] || keys.current['d'] || keys.current['D']) moveRight();
+      if (keys.current['ArrowLeft'] || keys.current['a'] || keys.current['A']) {
+        p.x = Math.max(0, p.x - PLAYER_SPEED);
+      }
+      if (keys.current['ArrowRight'] || keys.current['d'] || keys.current['D']) {
+        p.x = Math.min(CANVAS_W - PLAYER_WIDTH, p.x + PLAYER_SPEED);
+      }
 
       // Update bullets
       bulletsRef.current.forEach(b => (b.y -= BULLET_SPEED));
       bulletsRef.current = bulletsRef.current.filter(b => b.y > 0);
 
-      // Enemy fire
+      // Enemy fire timing
       if (time - lastEnemyFireRef.current > ENEMY_FIRE_INTERVAL) {
-        const alive = invadersRef.current.filter(i => i.alive);
-        if (alive.length) {
-          const shooter = alive[Math.floor(Math.random() * alive.length)];
+        const aliveInvaders = invadersRef.current.filter(i => i.alive);
+        if (aliveInvaders.length) {
+          const shooter = aliveInvaders[Math.floor(Math.random() * aliveInvaders.length)];
           enemyBulletsRef.current.push({ x: shooter.x + INVADER_WIDTH / 2, y: shooter.y + INVADER_HEIGHT });
         }
         lastEnemyFireRef.current = time;
@@ -191,9 +197,9 @@ export default function InvadersGame({ bro }: { bro?: any }) {
       enemyBulletsRef.current.forEach(b => (b.y += ENEMY_BULLET_SPEED));
       enemyBulletsRef.current = enemyBulletsRef.current.filter(b => b.y < CANVAS_H);
 
-      // Collisions player bullet -> invader
-      bulletsRef.current.forEach(bullet => {
-        invadersRef.current.forEach(inv => {
+      // Collision: player bullet vs invader
+      bulletsRef.current.forEach((bullet) => {
+        invadersRef.current.forEach((inv) => {
           if (!inv.alive) return;
           if (
             bullet.x > inv.x &&
@@ -202,15 +208,15 @@ export default function InvadersGame({ bro }: { bro?: any }) {
             bullet.y < inv.y + INVADER_HEIGHT
           ) {
             inv.alive = false;
-            bullet.y = -100;
-            setScore(s => s + 10);
+            bullet.y = -100; // mark bullet for removal
+            setScore((s) => s + 10);
           }
         });
       });
       bulletsRef.current = bulletsRef.current.filter(b => b.y > 0);
 
-      // Collisions enemy bullet -> player
-      enemyBulletsRef.current.forEach(b => {
+      // Collision: enemy bullet vs player
+      enemyBulletsRef.current.forEach((b) => {
         if (
           b.x > p.x &&
           b.x < p.x + PLAYER_WIDTH &&
@@ -218,7 +224,7 @@ export default function InvadersGame({ bro }: { bro?: any }) {
           b.y < p.y + PLAYER_HEIGHT
         ) {
           b.y = CANVAS_H + 100;
-          setLives(l => l - 1);
+          setLives((l) => l - 1);
         }
       });
       enemyBulletsRef.current = enemyBulletsRef.current.filter(b => b.y < CANVAS_H);
@@ -238,11 +244,11 @@ export default function InvadersGame({ bro }: { bro?: any }) {
       // Rendering
       ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
 
-      // Draw player using sprite (scale to fit width)
+      // Draw player sprite (green)
       const playerScale = Math.floor(PLAYER_WIDTH / playerSprite[0].length);
       drawSprite(ctx, p.x, p.y, playerSprite, '#00ff00', playerScale);
 
-      // Draw invaders using sprite (scale to fit width)
+      // Draw invaders (red)
       const invaderScale = Math.floor(INVADER_WIDTH / alienSprite[0].length);
       invadersRef.current.forEach(inv => {
         if (inv.alive) {
@@ -250,13 +256,13 @@ export default function InvadersGame({ bro }: { bro?: any }) {
         }
       });
 
-      // Draw bullets
+      // Draw bullets (yellow)
       ctx.fillStyle = '#ffff00';
       bulletsRef.current.forEach(b => {
         ctx.fillRect(b.x - 2, b.y - 10, 4, 10);
       });
 
-      // Draw enemy bullets
+      // Draw enemy bullets (white)
       ctx.fillStyle = '#ffffff';
       enemyBulletsRef.current.forEach(b => {
         ctx.fillRect(b.x - 2, b.y, 4, 10);
@@ -287,7 +293,8 @@ export default function InvadersGame({ bro }: { bro?: any }) {
   }, [lives, gameOver, score, wave]);
 
   return (
-    <div className="relative mx-auto" style={{ width: '100%', maxWidth: `${CANVAS_W}px` }}>
+    <div className="relative mx-auto bg-zinc-950 border border-zinc-800 p-4" style={{ width: '100%', maxWidth: `${CANVAS_W}px` }}>
+      <h1 className="text-center text-white text-2xl font-bold mb-2">GROSS INVADERS</h1>
       <canvas
         ref={canvasRef}
         width={CANVAS_W}
@@ -297,15 +304,15 @@ export default function InvadersGame({ bro }: { bro?: any }) {
       {/* Mobile touch controls */}
       <div className="absolute inset-0 flex justify-between items-end p-4 pointer-events-none">
         <button
-          className="bg-zinc-800 border border-zinc-700 text-white px-4 py-2 rounded pointer-events-auto active:bg-zinc-700"
+          className="bg-zinc-900 border border-zinc-700 text-white hover:bg-zinc-800 active:bg-zinc-700 font-mono font-bold px-4 py-2 rounded pointer-events-auto"
           onTouchStart={e => { e.preventDefault(); moveLeft(); }}
         >LEFT</button>
         <button
-          className="bg-zinc-800 border border-zinc-700 text-white px-4 py-2 rounded pointer-events-auto active:bg-zinc-700"
+          className="bg-zinc-900 border border-zinc-700 text-white hover:bg-zinc-800 active:bg-zinc-700 font-mono font-bold px-4 py-2 rounded pointer-events-auto"
           onTouchStart={e => { e.preventDefault(); fire(); }}
         >FIRE</button>
         <button
-          className="bg-zinc-800 border border-zinc-700 text-white px-4 py-2 rounded pointer-events-auto active:bg-zinc-700"
+          className="bg-zinc-900 border border-zinc-700 text-white hover:bg-zinc-800 active:bg-zinc-700 font-mono font-bold px-4 py-2 rounded pointer-events-auto"
           onTouchStart={e => { e.preventDefault(); moveRight(); }}
         >RIGHT</button>
       </div>
