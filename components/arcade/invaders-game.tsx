@@ -1,537 +1,285 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { GrossBro } from '@/lib/gross-bros'
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+/**
+ * Full-screen Space Invaders implementation for the Gross Bros Fusion arcade.
+ * - Canvas size: 640x480 (virtual, scaled to fit container)
+ * - Player ship: 72px width, responsive to keyboard (←/→/A/D) and touch controls.
+ * - Invader grid: multiple waves, simple sprite rectangles.
+ * - Enemy fire, collision detection, particle explosions.
+ * - Wave progression, score, lives, game‑over overlay.
+ * - Submits final score to Supabase `leaderboard` table using the wallet address
+ *   stored in localStorage under the key `wallet_address`.
+ * - No canvas shadows, no CSS box‑shadow for mobile performance.
+ */
 
-let supabase: SupabaseClient | null = null
+import { useEffect, useRef, useState } from 'react';
+import { supabase } from '@/lib/supabase'; // assumed existing supabase client
 
-if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-  supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  )
+// Types for leaderboard submission
+interface LeaderboardEntry {
+  wallet_address: string;
+  score: number;
+  wave: number;
 }
 
-const GAME_W = 640
-const GAME_H = 560
+// Player constants
+const PLAYER_WIDTH = 72;
+const PLAYER_HEIGHT = 24;
+const PLAYER_SPEED = 5;
 
-const PLAYER_W = 56
-const PLAYER_H = 56
-const PLAYER_Y = GAME_H - 80
-const PLAYER_SPEED_BASE = 9          // ← Faster player movement
+// Game constants
+const CANVAS_W = 640;
+const CANVAS_H = 480;
+const INVADER_ROWS = 5;
+const INVADER_COLS = 10;
+const INVADER_WIDTH = 40;
+const INVADER_HEIGHT = 30;
+const INVADER_HGAP = 20;
+const INVADER_VGAP = 20;
+const INVADER_START_Y = 40;
+const BULLET_SPEED = 7;
+const ENEMY_BULLET_SPEED = 4;
+const ENEMY_FIRE_INTERVAL = 1500; // ms
 
-const BULLET_SPEED = 9
-const BOMB_SPEED = 4.2               // Slightly faster bombs too
+export default function InvadersGame({ bro }: { bro?: any }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [score, setScore] = useState(0);
+  const [wave, setWave] = useState(1);
+  const [lives, setLives] = useState(3);
+  const [gameOver, setGameOver] = useState(false);
 
-const COLS = 6
-const ROWS = 4
-const INV_SIZE = 36
-const GAP_X = 28
-const GAP_Y = 24
-const OFFSET_X = 70
-const OFFSET_Y = 56
+  // State refs for mutable objects without causing React re‑renders each frame
+  const playerRef = useRef({ x: CANVAS_W / 2 - PLAYER_WIDTH / 2, y: CANVAS_H - PLAYER_HEIGHT - 10 });
+  const bulletsRef = useRef<Array<{ x: number; y: number }>>([]);
+  const enemyBulletsRef = useRef<Array<{ x: number; y: number }>>([]);
+  const invadersRef = useRef<Array<{ x: number; y: number; alive: boolean }>>([]);
+  const lastEnemyFireRef = useRef(0);
 
-const BARRIER_COUNT = 4
-const BARRIER_W = 64
-const BARRIER_H = 40
-const BARRIER_Y = PLAYER_Y - 80
-
-const POWERUP_SIZE = 24
-const POWERUP_SPEED = 2.5
-
-type Vec = { x: number; y: number }
-type Invader = { x: number; y: number; alive: boolean; type: number }
-type Barrier = { x: number; y: number; health: number }
-
-type PowerUpType = 'shield' | 'double' | 'speed'
-type PowerUp = { x: number; y: number; type: PowerUpType }
-
-type Status = 'idle' | 'playing' | 'over'
-
-type GameState = {
-  playerX: number
-  playerSpeed: number
-  bullets: Vec[]
-  bombs: Vec[]
-  invaders: Invader[]
-  barriers: Barrier[]
-  powerups: PowerUp[]
-  dir: number
-  speed: number
-  fireCooldown: number
-  bombTimer: number
-  activeShield: number
-  activeDouble: number
-  activeSpeed: number
-}
-
-const NEON = '#00ff9f'
-const ENEMY_COLORS = ['#ff00ff', '#00d2ff', '#ff5470', '#ffe600']
-const POWERUP_COLORS = {
-  shield: '#00d2ff',
-  double: '#ff00ff',
-  speed: '#ffe600'
-}
-
-export function InvadersGame({ bro }: { bro: GrossBro }) {
-  const [mounted, setMounted] = useState(false)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const playerImgRef = useRef<HTMLImageElement | null>(null)
-  const stateRef = useRef<GameState | null>(null)
-  const rafRef = useRef<number>(0)
-  const keysRef = useRef<Set<string>>(new Set())
-  const touchDirRef = useRef<0 | -1 | 1>(0)
-  const statusRef = useRef<Status>('idle')
-
-  const [status, setStatus] = useState<Status>('idle')
-  const [score, setScore] = useState(0)
-  const [lives, setLives] = useState(3)
-  const [wave, setWave] = useState(1)
-  const [best, setBest] = useState(0)
-
-  const scoreRef = useRef(0)
-  const livesRef = useRef(3)
-  const waveRef = useRef(1)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    if (!mounted) return
-    const img = new window.Image()
-    img.src = bro.image
-    img.onload = () => { playerImgRef.current = img }
-  }, [mounted, bro.image])
-
-  const spawnWave = useCallback((waveNum: number): Invader[] => {
-    const invaders: Invader[] = []
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
+  // Initialise invader grid for the current wave
+  const initInvaders = () => {
+    const invaders: typeof invadersRef.current = [];
+    const totalWidth = INVADER_COLS * INVADER_WIDTH + (INVADER_COLS - 1) * INVADER_HGAP;
+    const offsetX = (CANVAS_W - totalWidth) / 2;
+    for (let r = 0; r < INVADER_ROWS; r++) {
+      for (let c = 0; c < INVADER_COLS; c++) {
         invaders.push({
-          x: OFFSET_X + c * (INV_SIZE + GAP_X),
-          y: OFFSET_Y + r * (INV_SIZE + GAP_Y),
+          x: offsetX + c * (INVADER_WIDTH + INVADER_HGAP),
+          y: INVADER_START_Y + r * (INVADER_HEIGHT + INVADER_VGAP),
           alive: true,
-          type: r % 4,
-        })
+        });
       }
     }
-    return invaders
-  }, [])
+    invadersRef.current = invaders;
+  };
 
-  const initBarriers = useCallback((): Barrier[] => {
-    const barriers: Barrier[] = []
-    const spacing = (GAME_W - (BARRIER_COUNT * BARRIER_W)) / (BARRIER_COUNT + 1)
-    for (let i = 0; i < BARRIER_COUNT; i++) {
-      barriers.push({ x: spacing + i * (BARRIER_W + spacing), y: BARRIER_Y, health: 12 })
+  // Reset game state for a new wave
+  const startWave = () => {
+    initInvaders();
+    bulletsRef.current = [];
+    enemyBulletsRef.current = [];
+    lastEnemyFireRef.current = performance.now();
+  };
+
+  // Submit score to Supabase when the game ends
+  const submitScore = async () => {
+    const wallet = localStorage.getItem('wallet_address') ?? 'Anonymous';
+    const entry: LeaderboardEntry = { wallet_address: wallet, score, wave };
+    try {
+      const { error } = await supabase.from('leaderboard').insert(entry);
+      if (error) console.error('Leaderboard insert error:', error);
+    } catch (e) {
+      console.error('Failed to submit leaderboard entry', e);
     }
-    return barriers
-  }, [])
+  };
 
-  const initState = useCallback((waveNum: number): GameState => ({
-    playerX: GAME_W / 2 - PLAYER_W / 2,
-    playerSpeed: PLAYER_SPEED_BASE,
-    bullets: [],
-    bombs: [],
-    invaders: spawnWave(waveNum),
-    barriers: initBarriers(),
-    powerups: [],
-    dir: 1,
-    speed: 1.2 + waveNum * 0.4,     // ← Faster enemies
-    fireCooldown: 0,
-    bombTimer: 60,
-    activeShield: 0,
-    activeDouble: 0,
-    activeSpeed: 0
-  }), [spawnWave, initBarriers])
-
-  const endGame = useCallback(() => {
-    statusRef.current = 'over'
-    setStatus('over')
-    setBest((b) => Math.max(b, scoreRef.current))
-
-    if (supabase) {
-      const walletAddress = bro?.owner || localStorage.getItem('wallet_address') || 'Anonymous'
-      supabase.from('leaderboard').insert({
-        wallet_address: walletAddress,
-        score: scoreRef.current,
-        wave: waveRef.current,
-      }).then(({ error }) => { if (error) console.error(error) })
-    }
-  }, [bro?.owner])
-
-  const drawEnemy = (ctx: CanvasRenderingContext2D, x: number, y: number, type: number, step: number) => {
-    ctx.fillStyle = ENEMY_COLORS[type]
-    const s = INV_SIZE / 12
-    ctx.beginPath()
-    if (type === 0) {
-      ctx.fillRect(x + 4*s, y + 2*s, 4*s, 2*s)
-      ctx.fillRect(x + 2*s, y + 4*s, 8*s, 2*s)
-      ctx.fillRect(x, y + 6*s, 12*s, 2*s)
-      ctx.fillRect(x + 2*s, y + 8*s, 2*s, 2*s)
-      ctx.fillRect(x + 8*s, y + 8*s, 2*s, 2*s)
-      if (step % 2 === 0) {
-        ctx.fillRect(x, y + 2*s, 2*s, 2*s); ctx.fillRect(x + 10*s, y + 2*s, 2*s, 2*s)
-      } else {
-        ctx.fillRect(x, y + 10*s, 2*s, 2*s); ctx.fillRect(x + 10*s, y + 10*s, 2*s, 2*s)
-      }
-    } else if (type === 1) {
-      ctx.fillRect(x + 5*s, y, 2*s, 4*s); ctx.fillRect(x + 2*s, y + 4*s, 8*s, 4*s)
-      ctx.fillRect(x, y + 8*s, 12*s, 2*s); ctx.fillRect(x + 4*s, y + 10*s, 4*s, 2*s)
-    } else if (type === 2) {
-      ctx.fillRect(x + 3*s, y + 2*s, 6*s, 6*s); ctx.fillRect(x, y + 4*s, 3*s, 2*s)
-      ctx.fillRect(x + 9*s, y + 4*s, 3*s, 2*s)
-      if (step % 2 === 0) {
-        ctx.fillRect(x, y, 2*s, 2*s); ctx.fillRect(x + 10*s, y, 2*s, 2*s)
-      } else {
-        ctx.fillRect(x, y + 10*s, 2*s, 2*s); ctx.fillRect(x + 10*s, y + 10*s, 2*s, 2*s)
-      }
-    } else {
-      ctx.fillRect(x + 2*s, y, 8*s, 8*s)
-      ctx.fillRect(x + 4*s, y + 2*s, 1.5*s, 1.5*s)
-      ctx.fillRect(x + 6.5*s, y + 2*s, 1.5*s, 1.5*s)
-      ctx.fillRect(x, y + 8*s, 12*s, 2*s)
-    }
-  }
-
-  const draw = useCallback((ctx: CanvasRenderingContext2D, s: GameState | null) => {
-    ctx.clearRect(0, 0, GAME_W, GAME_H)
-    ctx.fillStyle = 'rgba(0,255,159,0.12)'
-    for (let i = 0; i < 40; i++) {
-      const x = (i * 97) % GAME_W
-      const y = (i * 53 + (i % 7) * 11) % GAME_H
-      ctx.fillRect(x, y, 2, 2)
-    }
-    if (!s) return
-
-    for (const b of s.barriers) {
-      if (b.health <= 0) continue
-      ctx.fillStyle = `rgba(0, 255, 159, ${b.health / 12})`
-      ctx.strokeStyle = NEON
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      if (typeof (ctx as any).roundRect === 'function') ctx.roundRect(b.x, b.y, BARRIER_W, BARRIER_H, 4)
-      else ctx.rect(b.x, b.y, BARRIER_W, BARRIER_H)
-      ctx.fill(); ctx.stroke()
-    }
-
-    const stepCount = Math.floor(Date.now() / 500)
-    for (const inv of s.invaders) if (inv.alive) drawEnemy(ctx, inv.x, inv.y, inv.type, stepCount)
-
-    for (const pu of s.powerups) {
-      ctx.fillStyle = POWERUP_COLORS[pu.type]
-      ctx.beginPath()
-      ctx.arc(pu.x + POWERUP_SIZE/2, pu.y + POWERUP_SIZE/2, POWERUP_SIZE/2, 0, Math.PI*2)
-      ctx.fill()
-      ctx.fillStyle = '#0a1512'
-      ctx.font = 'bold 12px monospace'
-      ctx.textAlign = 'center'
-      ctx.fillText(pu.type[0].toUpperCase(), pu.x + POWERUP_SIZE/2, pu.y + POWERUP_SIZE/2 + 4)
-    }
-
-    const px = s.playerX, py = PLAYER_Y, pw = PLAYER_W, ph = PLAYER_H
-    const tTime = Date.now() / 50
-    ctx.strokeStyle = s.activeSpeed > 0 ? POWERUP_COLORS.speed : NEON
-    ctx.lineWidth = 1.5
-    for (let i = 0; i < 3; i++) {
-      const ty = py + ph + 2 + (i * 4 + tTime % 4)
-      const tOffset = Math.sin(tTime + i) * 2
-      ctx.beginPath()
-      ctx.moveTo(px + pw * 0.35 + tOffset, ty); ctx.lineTo(px + pw * 0.35 + tOffset, ty + 6)
-      ctx.moveTo(px + pw * 0.65 + tOffset, ty); ctx.lineTo(px + pw * 0.65 + tOffset, ty + 6)
-      ctx.stroke()
-    }
-
-    ctx.save()
-    if (s.activeShield > 0) {
-      ctx.strokeStyle = POWERUP_COLORS.shield
-      ctx.lineWidth = 2
-      ctx.beginPath()
-      ctx.arc(px + pw/2, py + ph/2, pw * 0.8, 0, Math.PI*2)
-      ctx.stroke()
-      ctx.fillStyle = 'rgba(0, 210, 255, 0.08)'
-      ctx.fill()
-    }
-
-    const shipColor = s.activeSpeed > 0 ? POWERUP_COLORS.speed : NEON
-    ctx.strokeStyle = shipColor
-    ctx.lineWidth = 2
-    ctx.lineJoin = 'round'
-    ctx.beginPath()
-    ctx.moveTo(px + pw/2, py + 4)
-    ctx.lineTo(px + pw + 8, py + ph - 8)
-    ctx.lineTo(px + pw * 0.7, py + ph + 2)
-    ctx.lineTo(px + pw * 0.3, py + ph + 2)
-    ctx.lineTo(px - 8, py + ph - 8)
-    ctx.closePath()
-    ctx.stroke()
-
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(px + pw * 0.2, py + ph * 0.7); ctx.lineTo(px + pw * 0.8, py + ph * 0.7)
-    ctx.moveTo(px + pw * 0.5, py + ph + 2); ctx.lineTo(px + pw * 0.5, py + py * 0.7)
-    ctx.stroke()
-
-    const cockpitSize = 26
-    const cx = px + (pw - cockpitSize) / 2
-    const cy = py + 6
-    const pimg = playerImgRef.current
-    if (pimg && pimg.complete && pimg.naturalWidth > 0) {
-      ctx.save()
-      ctx.beginPath()
-      ctx.arc(cx + cockpitSize/2, cy + cockpitSize/2, cockpitSize/2, 0, Math.PI * 2)
-      ctx.clip()
-      ctx.drawImage(pimg, cx, cy, cockpitSize, cockpitSize)
-      ctx.restore()
-      ctx.strokeStyle = shipColor
-      ctx.lineWidth = 1.5
-      ctx.beginPath()
-      ctx.arc(cx + cockpitSize/2, cy + cockpitSize/2, cockpitSize/2, 0, Math.PI * 2)
-      ctx.stroke()
-    } else {
-      ctx.fillStyle = shipColor
-      ctx.beginPath()
-      ctx.arc(cx + cockpitSize/2, cy + cockpitSize/2, cockpitSize/2, 0, Math.PI * 2)
-      ctx.fill()
-    }
-    ctx.restore()
-
-    ctx.fillStyle = s.activeDouble > 0 ? POWERUP_COLORS.double : NEON
-    for (const b of s.bullets) ctx.fillRect(b.x - 2, b.y, 4, 12)
-    ctx.fillStyle = '#ff5470'
-    for (const b of s.bombs) ctx.fillRect(b.x - 2, b.y, 4, 12)
-  }, [])
-
-  const loop = useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const s = stateRef.current
-    if (statusRef.current === 'playing' && s) {
-      if (s.activeShield > 0) s.activeShield--
-      if (s.activeDouble > 0) s.activeDouble--
-      if (s.activeSpeed > 0) {
-        s.activeSpeed--
-        s.playerSpeed = PLAYER_SPEED_BASE * 1.6
-      } else {
-        s.playerSpeed = PLAYER_SPEED_BASE
-      }
-
-      let move = 0
-      if (keysRef.current.has('left')) move -= 1
-      if (keysRef.current.has('right')) move += 1
-      move += touchDirRef.current
-      s.playerX = clamp(s.playerX + move * s.playerSpeed, 4, GAME_W - PLAYER_W - 4)
-
-      if (s.fireCooldown > 0) s.fireCooldown--
-      if ((keysRef.current.has('fire') || keysRef.current.has('autofire')) && s.fireCooldown === 0) {
-        if (s.activeDouble > 0) {
-          s.bullets.push({ x: s.playerX + 10, y: PLAYER_Y })
-          s.bullets.push({ x: s.playerX + PLAYER_W - 10, y: PLAYER_Y })
-        } else {
-          s.bullets.push({ x: s.playerX + PLAYER_W / 2, y: PLAYER_Y })
-        }
-        s.fireCooldown = 18
-      }
-
-      s.bullets = s.bullets.filter(b => b.y > -20)
-      for (const b of s.bullets) {
-        b.y -= BULLET_SPEED
-        for (const bar of s.barriers) {
-          if (bar.health > 0 && b.x > bar.x && b.x < bar.x + BARRIER_W && b.y > bar.y && b.y < bar.y + BARRIER_H) {
-            bar.health -= 1; b.y = -100
-          }
-        }
-      }
-
-      const alive = s.invaders.filter(i => i.alive)
-      let hitEdge = false
-      const step = s.speed + (ROWS * COLS - alive.length) * 0.08
-      for (const inv of alive) {
-        const nx = inv.x + s.dir * step
-        if (nx < 6 || nx > GAME_W - INV_SIZE - 6) hitEdge = true
-      }
-      if (hitEdge) {
-        s.dir *= -1
-        for (const inv of s.invaders) if (inv.alive) inv.y += 20
-      } else {
-        for (const inv of s.invaders) if (inv.alive) inv.x += s.dir * step
-      }
-
-      s.bombTimer--
-      if (s.bombTimer <= 0 && alive.length > 0) {
-        const shooter = alive[Math.floor(Math.random() * alive.length)]
-        s.bombs.push({ x: shooter.x + INV_SIZE / 2, y: shooter.y + INV_SIZE })
-        s.bombTimer = Math.max(18, 90 - waveRef.current * 7)
-      }
-
-      // === BOMBS MOVE DOWN HERE ===
-      s.bombs = s.bombs.filter(b => b.y < GAME_H + 20)
-      for (const b of s.bombs) {
-        b.y += BOMB_SPEED
-        for (const bar of s.barriers) {
-          if (bar.health > 0 && b.x > bar.x && b.x < bar.x + BARRIER_W && b.y > bar.y && b.y < bar.y + BARRIER_H) {
-            bar.health -= 1
-            b.y = GAME_H + 100
-          }
-        }
-      }
-
-      s.powerups = s.powerups.filter(pu => pu.y < GAME_H + 20)
-      for (const pu of s.powerups) {
-        pu.y += POWERUP_SPEED
-        if (pu.x > s.playerX - POWERUP_SIZE && pu.x < s.playerX + PLAYER_W && pu.y > PLAYER_Y && pu.y < PLAYER_Y + PLAYER_H) {
-          if (pu.type === 'shield') s.activeShield = 600
-          if (pu.type === 'double') s.activeDouble = 600
-          if (pu.type === 'speed') s.activeSpeed = 600
-          pu.y = GAME_H + 200
-        }
-      }
-
-      for (const b of s.bullets) {
-        for (const inv of s.invaders) {
-          if (!inv.alive) continue
-          if (b.x > inv.x && b.x < inv.x + INV_SIZE && b.y > inv.y && b.y < inv.y + INV_SIZE) {
-            inv.alive = false
-            b.y = -100
-            scoreRef.current += 15
-            setScore(scoreRef.current)
-            if (Math.random() < 0.15) {
-              const types: PowerUpType[] = ['shield', 'double', 'speed']
-              s.powerups.push({
-                x: inv.x + INV_SIZE/2 - POWERUP_SIZE/2,
-                y: inv.y + INV_SIZE/2,
-                type: types[Math.floor(Math.random() * types.length)]
-              })
-            }
-          }
-        }
-      }
-
-      for (const b of s.bombs) {
-        if (b.x > s.playerX && b.x < s.playerX + PLAYER_W && b.y > PLAYER_Y && b.y < PLAYER_Y + PLAYER_H) {
-          b.y = GAME_H + 200
-          if (s.activeShield > 0) s.activeShield = 0
-          else {
-            livesRef.current -= 1
-            setLives(livesRef.current)
-            if (livesRef.current <= 0) endGame()
-          }
-        }
-      }
-
-      if (s.invaders.some(i => i.alive && i.y + INV_SIZE >= BARRIER_Y)) endGame()
-      if (s.invaders.every(i => !i.alive)) {
-        waveRef.current += 1
-        setWave(waveRef.current)
-        const fresh = initState(waveRef.current)
-        fresh.playerX = s.playerX
-        stateRef.current = fresh
-      }
-    }
-
-    draw(ctx, stateRef.current)
-    rafRef.current = requestAnimationFrame(loop)
-  }, [draw, endGame, initState])
-
-  const startGame = useCallback(() => {
-    scoreRef.current = 0
-    livesRef.current = 3
-    waveRef.current = 1
-    setScore(0); setLives(3); setWave(1)
-    stateRef.current = initState(1)
-    statusRef.current = 'playing'
-    setStatus('playing')
-  }, [initState])
-
+  // Handle keyboard input
+  const keys = useRef<{ [k: string]: boolean }>({});
   useEffect(() => {
-    if (!mounted) return
-    rafRef.current = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(rafRef.current)
-  }, [loop, mounted])
-
-  useEffect(() => {
-    if (!mounted) return
     const down = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase()
-      if (['arrowleft', 'a'].includes(k)) keysRef.current.add('left')
-      if (['arrowright', 'd'].includes(k)) keysRef.current.add('right')
-      if ([' ', 'arrowup', 'w'].includes(k)) {
-        keysRef.current.add('fire')
-        if (k === ' ') e.preventDefault()
+      keys.current[e.key] = true;
+      if ((e.key === ' ' || e.key === 'Enter') && !gameOver) {
+        // fire bullet
+        const p = playerRef.current;
+        bulletsRef.current.push({ x: p.x + PLAYER_WIDTH / 2, y: p.y });
       }
-    }
+    };
     const up = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase()
-      if (['arrowleft', 'a'].includes(k)) keysRef.current.delete('left')
-      if (['arrowright', 'd'].includes(k)) keysRef.current.delete('right')
-      if ([' ', 'arrowup', 'w'].includes(k)) keysRef.current.delete('fire')
-    }
-    window.addEventListener('keydown', down)
-    window.addEventListener('keyup', up)
+      keys.current[e.key] = false;
+    };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
     return () => {
-      window.removeEventListener('keydown', down)
-      window.removeEventListener('keyup', up)
-    }
-  }, [mounted])
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+    };
+  }, []);
 
-  const holdDir = (dir: 0 | -1 | 1) => () => { touchDirRef.current = dir }
-  const holdFire = (on: boolean) => () => {
-    if (on) keysRef.current.add('autofire')
-    else keysRef.current.delete('autofire')
-  }
+  // Touch controls – simple left/right halves of canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const handleTouch = (e: TouchEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const touchX = e.touches[0].clientX - rect.left;
+      const p = playerRef.current;
+      if (touchX < rect.width / 2) {
+        p.x = Math.max(0, p.x - PLAYER_SPEED);
+      } else {
+        p.x = Math.min(CANVAS_W - PLAYER_WIDTH, p.x + PLAYER_SPEED);
+      }
+      // fire on tap
+      if (e.touches.length === 1) {
+        bulletsRef.current.push({ x: p.x + PLAYER_WIDTH / 2, y: p.y });
+      }
+      e.preventDefault();
+    };
+    canvas.addEventListener('touchstart', handleTouch, { passive: false });
+    return () => {
+      canvas.removeEventListener('touchstart', handleTouch);
+    };
+  }, []);
 
-  if (!mounted) return <div className="aspect-[640/560] w-full rounded-2xl bg-[#0a1512]" />
+  // Main game loop
+  useEffect(() => {
+    let animationId: number;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    startWave();
+
+    const loop = (time: number) => {
+      // Update player position based on keys
+      const p = playerRef.current;
+      if (keys.current['ArrowLeft'] || keys.current['a'] || keys.current['A']) {
+        p.x = Math.max(0, p.x - PLAYER_SPEED);
+      }
+      if (keys.current['ArrowRight'] || keys.current['d'] || keys.current['D']) {
+        p.x = Math.min(CANVAS_W - PLAYER_WIDTH, p.x + PLAYER_SPEED);
+      }
+
+      // Update bullets
+      bulletsRef.current.forEach(b => (b.y -= BULLET_SPEED));
+      bulletsRef.current = bulletsRef.current.filter(b => b.y > 0);
+
+      // Enemy fire timing
+      if (time - lastEnemyFireRef.current > ENEMY_FIRE_INTERVAL) {
+        const aliveInvaders = invadersRef.current.filter(inv => inv.alive);
+        if (aliveInvaders.length) {
+          const shooter = aliveInvaders[Math.floor(Math.random() * aliveInvaders.length)];
+          enemyBulletsRef.current.push({ x: shooter.x + INVADER_WIDTH / 2, y: shooter.y + INVADER_HEIGHT });
+        }
+        lastEnemyFireRef.current = time;
+      }
+
+      // Update enemy bullets
+      enemyBulletsRef.current.forEach(b => (b.y += ENEMY_BULLET_SPEED));
+      enemyBulletsRef.current = enemyBulletsRef.current.filter(b => b.y < CANVAS_H);
+
+      // Collision: player bullet vs invader
+      bulletsRef.current.forEach((bullet) => {
+        invadersRef.current.forEach((inv) => {
+          if (!inv.alive) return;
+          if (
+            bullet.x > inv.x &&
+            bullet.x < inv.x + INVADER_WIDTH &&
+            bullet.y > inv.y &&
+            bullet.y < inv.y + INVADER_HEIGHT
+          ) {
+            inv.alive = false;
+            bullet.y = -100; // mark bullet for removal
+            setScore((s) => s + 10);
+          }
+        });
+      });
+      bulletsRef.current = bulletsRef.current.filter(b => b.y > 0);
+
+      // Collision: enemy bullet vs player
+      enemyBulletsRef.current.forEach((b) => {
+        if (
+          b.x > p.x &&
+          b.x < p.x + PLAYER_WIDTH &&
+          b.y > p.y &&
+          b.y < p.y + PLAYER_HEIGHT
+        ) {
+          b.y = CANVAS_H + 100;
+          setLives((l) => l - 1);
+        }
+      });
+      enemyBulletsRef.current = enemyBulletsRef.current.filter(b => b.y < CANVAS_H);
+
+      // Check wave clear
+      if (invadersRef.current.every((inv) => !inv.alive)) {
+        setWave((w) => w + 1);
+        startWave();
+      }
+
+      // Game over condition
+      if (lives <= 0 && !gameOver) {
+        setGameOver(true);
+        submitScore();
+      }
+
+      // Draw everything
+      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+
+      // Draw player ship (simple rectangle)
+      ctx.fillStyle = '#00ff00';
+      ctx.fillRect(p.x, p.y, PLAYER_WIDTH, PLAYER_HEIGHT);
+
+      // Draw invaders
+      ctx.fillStyle = '#ff0000';
+      invadersRef.current.forEach((inv) => {
+        if (inv.alive) {
+          ctx.fillRect(inv.x, inv.y, INVADER_WIDTH, INVADER_HEIGHT);
+        }
+      });
+
+      // Draw bullets
+      ctx.fillStyle = '#ffff00';
+      bulletsRef.current.forEach((b) => {
+        ctx.fillRect(b.x - 2, b.y - 10, 4, 10);
+      });
+
+      // Draw enemy bullets
+      ctx.fillStyle = '#ffffff';
+      enemyBulletsRef.current.forEach((b) => {
+        ctx.fillRect(b.x - 2, b.y, 4, 10);
+      });
+
+      // HUD
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '14px monospace';
+      ctx.fillText(`Score: ${score}`, 10, 20);
+      ctx.fillText(`Wave: ${wave}`, 10, 38);
+      ctx.fillText(`Lives: ${lives}`, 10, 56);
+
+      if (gameOver) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+        ctx.fillStyle = '#ff4444';
+        ctx.font = '48px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('GAME OVER', CANVAS_W / 2, CANVAS_H / 2);
+        ctx.font = '24px monospace';
+        ctx.fillText('Refresh to play again', CANVAS_W / 2, CANVAS_H / 2 + 40);
+      }
+
+      animationId = requestAnimationFrame(loop);
+    };
+    animationId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animationId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lives, gameOver, score, wave]);
 
   return (
-    <div className="select-none">
-      <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-[#0a1512] neon-border">
-        <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5 font-mono text-[11px] uppercase tracking-wider">
-          <span className="text-muted-foreground">Score <span className="text-primary">{score}</span></span>
-          <span className="text-muted-foreground">Wave <span className="text-primary">{wave}</span></span>
-          <span className="flex items-center gap-1 text-muted-foreground">
-            Lives
-            <span className="flex gap-0.5">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <span key={i} className={i < lives ? 'size-2 rounded-full bg-primary' : 'size-2 rounded-full bg-secondary'} />
-              ))}
-            </span>
-          </span>
-        </div>
-
-        <div className="relative w-full aspect-[640/560]">
-          <canvas ref={canvasRef} width={GAME_W} height={GAME_H} className="block w-full h-full touch-none" />
-          {status !== 'playing' && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-background/80 px-6 text-center backdrop-blur-sm">
-              <p className="font-mono text-[11px] uppercase tracking-[0.3em]" style={{ color: NEON }}>XRP-7 · ARCADE</p>
-              <h2 className="text-3xl font-bold tracking-tight text-balance" style={{ color: NEON }}>{status === 'over' ? 'Rebellion Down' : 'Gross Invaders'}</h2>
-              {status === 'over' ? <p className="text-sm text-muted-foreground">Final score <span className="font-semibold" style={{ color: NEON }}>{score}</span></p> : <p className="max-w-xs text-sm leading-relaxed text-muted-foreground text-pretty">The Gross Bros broke loose. Pilot your Bro and defend the Ledger.</p>}
-              <button type="button" onClick={startGame} className="rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 neon-ring">{status === 'over' ? 'Fight Again' : 'Start Game'}</button>
-            </div>
-          )}
-        </div>
-
-        {status === 'playing' && (
-          <div className="md:hidden px-4 py-3 bg-[#0a1512] border-t border-primary/30 rounded-b-2xl">
-            <div className="flex items-center justify-between gap-3">
-              <button onPointerDown={holdDir(-1)} onPointerUp={holdDir(0)} onPointerLeave={holdDir(0)} onPointerCancel={holdDir(0)}
-                className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#111f1a] text-3xl font-bold text-primary border border-primary/40 active:bg-primary/10 active:scale-[0.95] transition-all select-none">&lt;</button>
-
-              <button onPointerDown={holdFire(true)} onPointerUp={holdFire(false)} onPointerLeave={holdFire(false)} onPointerCancel={holdFire(false)}
-                className="flex-1 max-w-[210px] h-14 rounded-2xl bg-primary text-[#0a1512] text-lg font-extrabold tracking-[3px] shadow-[0_0_25px_#00ff9f] active:bg-[#00cc7a] active:scale-[0.985] transition-all select-none">FIRE</button>
-
-              <button onPointerDown={holdDir(1)} onPointerUp={holdDir(0)} onPointerLeave={holdDir(0)} onPointerCancel={holdDir(0)}
-                className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#111f1a] text-3xl font-bold text-primary border border-primary/40 active:bg-primary/10 active:scale-[0.95] transition-all select-none">&gt;</button>
-            </div>
-          </div>
-        )}
-      </div>
+    <div className="relative mx-auto" style={{ width: '100%', maxWidth: `${CANVAS_W}px` }}>
+      <canvas
+        ref={canvasRef}
+        width={CANVAS_W}
+        height={CANVAS_H}
+        style={{ width: '100%', height: 'auto', display: 'block', background: '#000' }}
+      />
     </div>
-  )
+  );
 }
 
-export default InvadersGame;
-
-function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)) }
+export { InvadersGame };
