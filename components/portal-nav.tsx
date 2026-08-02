@@ -1,8 +1,8 @@
 'use client'
 
-import { Gamepad2, MessageSquare, Wallet } from 'lucide-react'
+import { MessageSquare, Wallet } from 'lucide-react'
 
-export type TabId = 'chat' | 'wallet' | 'arcade'
+export type TabId = 'chat' | 'wallet'
 
 interface TabConfig {
   id: TabId
@@ -12,8 +12,7 @@ interface TabConfig {
 
 const tabs: TabConfig[] = [
   { id: 'chat', label: 'Tactical AI', icon: MessageSquare },
-  { id: 'wallet', label: 'Holder Wallet', icon: Wallet },
-  { id: 'arcade', label: 'Arcade', icon: Gamepad2 }
+  { id: 'wallet', label: 'Holder Wallet', icon: Wallet }
 ]
 
 interface NavProps {
@@ -88,7 +87,7 @@ export function PortalBottomNav({
 }: Omit<NavProps, 'connected' | 'xrpBalance'>) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 border-t border-zinc-800 bg-zinc-950/80 backdrop-blur-lg md:hidden">
-      <div className="grid grid-cols-3 gap-1 p-2">
+      <div className="grid grid-cols-2 gap-1 p-2">
         {tabs.map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
