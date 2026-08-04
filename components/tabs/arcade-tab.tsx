@@ -1,1 +1,1 @@
-'use client'\n\nimport React from 'react'\nimport { type GrossBro } from '@/lib/gross-bros'\n\ninterface ArcadeTabProps {\n  bro: GrossBro\n}\n\nexport function ArcadeTab({ bro }: ArcadeTabProps) {\n  return (\n    <div className="mx-auto max-w-4xl p-6">\n      <h2 className="text-2xl font-bold text-primary mb-4">Arcade</h2>\n      <p className="text-muted-foreground">Welcome to the arcade, {bro.name}! Here you can enjoy mini‑games and leaderboards. (Feature coming soon.)</p>\n    </div>\n  )\n}\n\nexport default ArcadeTab\n
+$(cat /workspace/user/arcade-tab.tsx)
