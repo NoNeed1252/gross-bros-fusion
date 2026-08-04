@@ -1,46 +1,56 @@
 import { NextResponse } from 'next/server';
+import { getBotWalletAddress } from '@/app/lib/botWallet';
 
-export async function POST(req: Request) {
-  const { messages, systemPrompt } = await req.json();
-  
-  // Extract latest message text from the 'text' property (frontend sends .text)
-  const latestMessage = messages?.[messages.length - 1];
-  const latestText = latestMessage?.text || "";
-  const latestLower = latestText.toLowerCase();
+/** Simple command detection for the Trade Bot persona */
+function detectBotCommand(message: string): string | null {
+  const lower = message.toLowerCase().trim();
+  if (/\b(snipe|sniper)\b/.test(lower)) return 'snipe';
+  if (/\bcopy trade\b/.test(lower)) return 'copy';
+  if (/\bstart autopilot\b/.test(lower)) return 'autopilot';
+  if (/\bemergency stop\b/.test(lower)) return 'stop';
+  return null;
+}
 
-  // 1. Data-first pipe for XRPL/Tokens/NFTs
-  if (latestLower.includes('xrp') || latestLower.includes('token') || latestLower.includes('nft') || latestLower.includes('price')) {
-    const res = await fetch('https://api.xrpl' + '.to/v1/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: latestLower })
-    });
-    const data = await res.json();
-    return NextResponse.json({ text: JSON.stringify(data) });
+/** Mock evaluation – in a real system this would hook into AMM data, signal providers, etc. */
+function evaluateBotCommand(command: string, nftId: string): string {
+  switch (command) {
+    case 'snipe':
+      return `🚀 Snipe initiated for NFT ${nftId}. Monitoring low‑liquidity pools...`;
+    case 'copy':
+      return `📋 Copy‑trade enabled for NFT ${nftId}. Mirroring top trader rWallet...`;
+    case 'autopilot':
+      return `🤖 Autopilot mode engaged for NFT ${nftId}. Trades will be executed automatically based on market signals.`;
+    case 'stop':
+      return `🛑 Autopilot halted for NFT ${nftId}. Manual control restored.`;
+    default:
+      return 'Command not recognized.';
   }
+}
 
-  // 2. LLM pipe for general chat - Format history correctly for OpenRouter
-  // Map frontend's { role, text } to OpenRouter's { role, content }
-  const formattedMessages = [
-    { role: 'system', content: systemPrompt || 'You are a professional assistant.' },
-    ...messages.map((m: any) => ({ role: m.role === 'bro' ? 'assistant' : 'user', content: m.text }))
-  ];
+export async function POST(request: Request) {
+  try {
+    const { nftId, ownerAddress, message } = await request.json();
+    if (!nftId || !ownerAddress || !message) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+    // Determine if the NFT has an activated bot wallet
+    const botAddress = await getBotWalletAddress(nftId);
+    const isBotActive = !!botAddress;
 
-  const response = await fetch('https://openrouter' + '.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      'HTTP-Referer': 'https://grossbros.vercel.app',
-      'X-Title': 'Gross Bros Fusion'
-    },
-    body: JSON.stringify({
-      model: 'meta-llama/llama-3.1-8b-instruct',
-      messages: formattedMessages
-    })
-  });
+    if (isBotActive) {
+      const cmd = detectBotCommand(message);
+      if (cmd) {
+        const reply = evaluateBotCommand(cmd, nftId);
+        return NextResponse.json({ bot: true, reply });
+      }
+    }
 
-  const chatData = await response.json();
-  const content = chatData?.choices?.[0]?.message?.content || "No response.";
-  return NextResponse.json({ text: content });
+    // Fallback – forward to standard LLM (placeholder)
+    // In production this would call OpenRouter or another LLM endpoint.
+    const placeholder = `🧠 (standard LLM) You said: "${message}"`;
+    return NextResponse.json({ bot: false, reply: placeholder });
+  } catch (e: any) {
+    console.error('chat route error', e);
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
 }
