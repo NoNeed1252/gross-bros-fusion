@@ -53,19 +53,6 @@ export function NftIdentityCard({ bro }: { bro: GrossBro }) {
         <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
           {bro.backstory}
         </p>
-
-        {/* On-chain traits */}
-        <div className="flex flex-wrap gap-1.5">
-          {bro.traits.map((t) => (
-            <span
-              key={t.type}
-              className="rounded-md border border-primary/20 bg-primary/5 px-2 py-1 font-mono text-[10px] text-muted-foreground"
-            >
-              <span className="text-primary/80">{t.type}:</span> {t.value}
-            </span>
-          ))}
-        </div>
-
         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
           <StatBar label="Chaos" value={bro.stats.chaos} />
           <StatBar label="Slime" value={bro.stats.slime} />

@@ -1,14 +1,14 @@
 'use client'
 
-import { MessageSquare, Wallet, Gamepad2, Radio } from 'lucide-react'
+import { MessageSquare, Wallet, Users, Radio } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export type TabId = 'chat' | 'wallet' | 'arcade'
+export type TabId = 'chat' | 'wallet' | 'social'
 
 export const TABS: { id: TabId; label: string; icon: typeof MessageSquare }[] = [
   { id: 'chat', label: 'Chat', icon: MessageSquare },
   { id: 'wallet', label: 'Wallet', icon: Wallet },
-  { id: 'arcade', label: 'Arcade', icon: Gamepad2 },
+  { id: 'social', label: 'Social', icon: Users },
 ]
 
 function BroMark() {

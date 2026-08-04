@@ -15,21 +15,21 @@ import { PortalHeader, PortalBottomNav, type TabId } from '@/components/portal-n
 import { PortalFooter } from '@/components/portal-footer'
 import { ChatTab } from '@/components/tabs/chat-tab'
 import { WalletTab } from '@/components/tabs/wallet-tab'
-import { ArcadeTab } from '@/components/tabs/arcade-tab'
-import { GROSS_BROS, pickRandomBro, type GrossBro } from '@/lib/gross-bros'
+import { SocialTab } from '@/components/tabs/social-tab'
+import { GROSS_BROS } from '@/lib/gross-bros'
 
 export default function Page() {
   const [tab, setTab] = useState<TabId>('chat')
   const [connected, setConnected] = useState(false)
   const [connecting, setConnecting] = useState(false)
-  // The Bro the connected wallet holds. Resolved from the XRPL on connect.
-  const [bro, setBro] = useState<GrossBro>(GROSS_BROS[0])
+
+  // Demo: the holder owns the first Gross Bro in the catalog.
+  const bro = GROSS_BROS[0]
 
   function handleConnect() {
     setConnecting(true)
-    // Simulate the Xaman sign-in + XRPL NFT resolution round-trip.
+    // Simulate the Xaman sign-in + NFT resolution round-trip.
     window.setTimeout(() => {
-      setBro(pickRandomBro())
       setConnected(true)
       setConnecting(false)
     }, 1400)
@@ -50,8 +50,8 @@ export default function Page() {
             onConnect={handleConnect}
           />
         )}
-        {tab === 'wallet' && <WalletTab connected={connected} bro={bro} />}
-        {tab === 'arcade' && <ArcadeTab />}
+        {tab === 'wallet' && <WalletTab connected={connected} />}
+        {tab === 'social' && <SocialTab />}
       </main>
 
       <PortalFooter />
