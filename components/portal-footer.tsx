@@ -7,7 +7,7 @@ export function PortalFooter() {
         </p>
         <nav className="flex items-center gap-5">
           <a
-            href="#privacy"
+            href="/privacy"
             className="transition-colors hover:text-primary hover:text-glow"
           >
             Privacy Policy
