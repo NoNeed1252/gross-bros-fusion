@@ -3,8 +3,15 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const JSON_HEADERS = { 'Cache-Control': 'no-store' };
-const FETCH_TIMEOUT_MS = 8_000;
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+const REQUEST_TIMEOUT_MS = 10_000;
+
+type ChatMessage = {
+  role?: string;
+  text?: string;
+  content?: string;
+};
 
 type Price = {
   symbol: string;
@@ -20,20 +27,25 @@ type Price = {
 function json(data: unknown, init?: ResponseInit) {
   return NextResponse.json(data, {
     ...init,
-    headers: { ...JSON_HEADERS, ...(init?.headers ?? {}) },
+    headers: { 'Cache-Control': 'no-store', ...(init?.headers ?? {}) },
   });
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   try {
     const response = await fetch(url, {
+      ...init,
       signal: controller.signal,
-      headers: { Accept: 'application/json', 'User-Agent': 'gross-bros-fusion/1.0' },
       cache: 'no-store',
     });
-    if (!response.ok) throw new Error(`Upstream returned HTTP ${response.status}`);
+
+    if (!response.ok) {
+      throw new Error(`Upstream request failed with HTTP ${response.status}`);
+    }
+
     return (await response.json()) as T;
   } finally {
     clearTimeout(timer);
@@ -43,9 +55,14 @@ async function fetchJson<T>(url: string): Promise<T> {
 async function getXrpPrice(): Promise<Price> {
   const data = await fetchJson<Record<string, { usd?: number; usd_24h_change?: number }>>(
     'https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd&include_24hr_change=true',
+    { headers: { Accept: 'application/json' } },
   );
+
   const quote = data.ripple;
-  if (!quote?.usd || !Number.isFinite(quote.usd)) throw new Error('XRP price was not present in upstream response');
+  if (!quote?.usd || !Number.isFinite(quote.usd)) {
+    throw new Error('XRP price was missing from the provider response');
+  }
+
   return {
     symbol: 'XRP',
     name: 'XRP',
@@ -57,82 +74,153 @@ async function getXrpPrice(): Promise<Price> {
 }
 
 interface DexPair {
+  chainId?: string;
   baseToken?: { address?: string; name?: string; symbol?: string };
   priceUsd?: string;
   priceChange?: { h24?: number };
   liquidity?: { usd?: number };
-  chainId?: string;
 }
 
-async function getTokenPrice(identifier: string): Promise<Price> {
-  // DexScreener supports XRPL pairs and accepts the issuer address or token identifier.
+interface DexSearchResponse {
+  pairs?: DexPair[];
+}
+
+async function getXrplTokenPrice(identifier: string): Promise<Price> {
   const encoded = encodeURIComponent(identifier.trim());
-  const pairs = await fetchJson<DexPair[]>(`https://api.dexscreener.com/token-pairs/v1/xrpl/${encoded}`);
+  let pairs: DexPair[] = [];
+
+  try {
+    pairs = await fetchJson<DexPair[]>(
+      `https://api.dexscreener.com/token-pairs/v1/xrpl/${encoded}`,
+      { headers: { Accept: 'application/json' } },
+    );
+  } catch {
+    const search = await fetchJson<DexSearchResponse>(
+      `https://api.dexscreener.com/latest/dex/search?q=${encoded}`,
+      { headers: { Accept: 'application/json' } },
+    );
+    pairs = search.pairs || [];
+  }
+
+  const normalized = identifier.toLowerCase();
   const pair = pairs
     .filter((item) => item.chainId === 'xrpl' && Number.isFinite(Number(item.priceUsd)))
-    .sort((a, b) => Number(b.liquidity?.usd ?? 0) - Number(a.liquidity?.usd ?? 0))[0];
-  if (!pair?.priceUsd || !pair.baseToken) throw new Error('No priced XRPL token pair was found');
+    .filter((item) => {
+      const symbol = item.baseToken?.symbol?.toLowerCase() || '';
+      const name = item.baseToken?.name?.toLowerCase() || '';
+      const address = item.baseToken?.address?.toLowerCase() || '';
+      return symbol === normalized || name === normalized || address === normalized || pairs.length === 1;
+    })
+    .sort((a, b) => Number(b.liquidity?.usd || 0) - Number(a.liquidity?.usd || 0))[0];
+
+  if (!pair?.priceUsd || !pair.baseToken) {
+    throw new Error(`No live XRPL market was found for ${identifier}`);
+  }
+
   return {
     symbol: pair.baseToken.symbol || identifier,
     name: pair.baseToken.name || identifier,
     priceUsd: Number(pair.priceUsd),
     change24h: pair.priceChange?.h24,
     liquidityUsd: pair.liquidity?.usd,
-    source: 'DexScreener XRPL DEX pairs',
-    identifier,
+    source: 'DexScreener XRPL markets',
+    identifier: pair.baseToken.address || identifier,
     updatedAt: new Date().toISOString(),
   };
 }
 
-function extractPriceIdentifier(message: string): string | null {
+function extractAsset(message: string): string | null {
   const lower = message.toLowerCase();
-  if (!/(price|quote|worth|value|cost|trading)/.test(lower)) return null;
+  if (!/(price|quote|worth|value|cost|trading|trade|market|how much)/.test(lower)) return null;
   if (/\bxrp\b/.test(lower)) return 'XRP';
-  // XRPL token queries should include an issuer/token identifier. Do not guess one.
-  const address = message.match(/\br[1-9A-HJ-NP-Za-km-z]{24,34}\b/);
-  return address?.[0] ?? null;
+
+  const issuer = message.match(/\br[1-9A-HJ-NP-Za-km-z]{24,34}\b/);
+  if (issuer) return issuer[0];
+
+  const match = message.match(/\b(RLUSD|SOLO|CSC|XMEME|ELS|ARMY|DROP|EQ|XAH|XCAD|USD|USDC)\b/i);
+  return match?.[1]?.toUpperCase() || null;
 }
 
-function basicReply(message: string): string {
-  const text = message.trim();
-  if (/\b(hello|hi|hey)\b/i.test(text)) return 'Hey! I am the Gross Bros chat bot. Ask me for the XRP price or an XRPL token price.';
-  if (/\b(help|what can you do)\b/i.test(text)) return 'I can answer basic questions and retrieve live XRP prices. For an XRPL token, include its issuer address and ask for its price.';
-  if (/\b(snipe|sniper|copy trade|autopilot|emergency stop)\b/i.test(text)) return 'Trading actions are disabled in chat. I can provide market data, but I will not execute trades or custody funds.';
-  return `You said: “${text}”\n\nI am a basic chatbot, not a trading agent. Ask “What is the XRP price?” for live market data.`;
-}
+function normalizeMessages(body: any, latestMessage: string): Array<{ role: 'user' | 'assistant'; content: string }> {
+  const source = Array.isArray(body?.messages) ? body.messages : [];
+  const history = source
+    .map((message: ChatMessage) => {
+      const content = String(message.content ?? message.text ?? '').trim();
+      const role = message.role === 'assistant' || message.role === 'bro' ? 'assistant' : 'user';
+      return content ? { role, content } : null;
+    })
+    .filter((message): message is { role: 'user' | 'assistant'; content: string } => Boolean(message))
+    .slice(-12);
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const requested = searchParams.get('token') || searchParams.get('symbol') || 'XRP';
-  try {
-    const price = requested.trim().toUpperCase() === 'XRP' ? await getXrpPrice() : await getTokenPrice(requested);
-    return json({ ok: true, price });
-  } catch (error) {
-    console.error('price lookup failed', error);
-    return json({ ok: false, error: 'Unable to retrieve that live price right now.' }, { status: 502 });
+  if (latestMessage && history[history.length - 1]?.content !== latestMessage) {
+    history.push({ role: 'user', content: latestMessage });
   }
+
+  return history;
+}
+
+async function askOpenRouter(messages: Array<{ role: 'user' | 'assistant'; content: string }>, systemPrompt?: string): Promise<string> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error('OPENROUTER_API_KEY is not configured');
+
+  const response = await fetchJson<{ choices?: Array<{ message?: { content?: string } }> }>(OPENROUTER_URL, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://grossbros.vercel.app',
+      'X-Title': 'Gross Bros Fusion',
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      temperature: 0.7,
+      max_tokens: 500,
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt || 'You are Gross Bros Fusion, a witty and helpful XRPL assistant. Answer naturally, tell jokes when asked, and never claim to execute trades or guarantee investment returns.',
+        },
+        ...messages,
+      ],
+    }),
+  });
+
+  const content = response.choices?.[0]?.message?.content?.trim();
+  if (!content) throw new Error('LLM returned an empty response');
+  return content;
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null);
-    const message = typeof body?.message === 'string' ? body.message.trim() : '';
-    if (!message) return json({ ok: false, error: 'A non-empty message is required.' }, { status: 400 });
+    const latestMessage = typeof body?.message === 'string'
+      ? body.message.trim()
+      : String(body?.messages?.at?.(-1)?.content ?? body?.messages?.at?.(-1)?.text ?? '').trim();
 
-    const identifier = extractPriceIdentifier(message);
-    if (identifier) {
+    if (!latestMessage) return json({ ok: false, error: 'A non-empty message is required.' }, { status: 400 });
+
+    const asset = extractAsset(latestMessage);
+    if (asset) {
       try {
-        const price = identifier === 'XRP' ? await getXrpPrice() : await getTokenPrice(identifier);
-        return json({ ok: true, bot: false, reply: `${price.symbol} is $${price.priceUsd.toLocaleString(undefined, { maximumFractionDigits: 8 })} USD. Source: ${price.source}.`, price });
+        const price = asset === 'XRP' ? await getXrpPrice() : await getXrplTokenPrice(asset);
+        return json({
+          ok: true,
+          bot: false,
+          reply: `${price.symbol} is $${price.priceUsd.toLocaleString(undefined, { maximumFractionDigits: 8 })} USD. Source: ${price.source}.`,
+          price,
+        });
       } catch (error) {
-        console.error('chat price lookup failed', error);
-        return json({ ok: true, bot: false, reply: 'I could not retrieve that live price right now. Please try again shortly.' });
+        console.error('XRPL price lookup failed:', error);
+        return json({ ok: true, bot: false, reply: `I could not find a reliable live market for ${asset} right now. Try the token symbol, issuer address, or ask again shortly.` });
       }
     }
 
-    return json({ ok: true, bot: true, reply: basicReply(message) });
+    const reply = await askOpenRouter(normalizeMessages(body, latestMessage), body?.systemPrompt);
+    return json({ ok: true, bot: false, reply, text: reply });
   } catch (error) {
-    console.error('chat route error', error);
-    return json({ ok: false, error: 'Invalid request.' }, { status: 400 });
+    console.error('chat route error:', error);
+    const message = error instanceof Error ? error.message : 'Chat service unavailable';
+    return json({ ok: false, error: message }, { status: 502 });
   }
 }
