@@ -20,10 +20,10 @@ const GAME_H = 560
 const PLAYER_W = 64
 const PLAYER_H = 64
 const PLAYER_Y = GAME_H - 88
-const PLAYER_SPEED_BASE = 12          // ← faster player
+const PLAYER_SPEED_BASE = 12
 
-const BULLET_SPEED = 12               // ← faster bullets
-const BOMB_SPEED = 5.5                // ← faster bombs
+const BULLET_SPEED = 12
+const BOMB_SPEED = 5.5
 
 const COLS = 6
 const ROWS = 4
@@ -164,7 +164,6 @@ export function InvadersGame({
       barriers: initBarriers(),
       powerups: [],
       dir: 1,
-      // ← faster enemies, scales harder with waves
       speed: 1.8 + waveNum * 0.55,
       fireCooldown: 0,
       bombTimer: 45,
@@ -180,19 +179,27 @@ export function InvadersGame({
     setStatus("over")
     setBest((b) => Math.max(b, scoreRef.current))
 
-    if (supabase) {
-      const wallet = resolveWallet(walletAddress)
-      supabase
-        .from("leaderboard")
-        .insert({
-          wallet_address: wallet,
-          score: scoreRef.current,
-          wave: waveRef.current,
-        })
-        .then(({ error }) => {
-          if (error) console.error("Leaderboard insert error:", error)
-        })
+    if (!supabase) return
+
+    const wallet = resolveWallet(walletAddress)
+
+    // Only save scores from real connected wallets (holders)
+    // Anonymous / missing wallet = no leaderboard entry = no giveaway eligibility
+    if (!wallet || wallet === "Anonymous" || wallet.length < 25) {
+      console.log("Score not saved — connect a Gross Bro wallet to compete for prizes")
+      return
     }
+
+    supabase
+      .from("leaderboard")
+      .insert({
+        wallet_address: wallet,
+        score: scoreRef.current,
+        wave: waveRef.current,
+      })
+      .then(({ error }) => {
+        if (error) console.error("Leaderboard insert error:", error)
+      })
   }, [walletAddress])
 
   const drawEnemy = (
@@ -411,7 +418,6 @@ export function InvadersGame({
       )
 
       if (s.fireCooldown > 0) s.fireCooldown--
-      // ← faster fire rate
       if (
         (keysRef.current.has("fire") || keysRef.current.has("autofire")) &&
         s.fireCooldown === 0
@@ -463,7 +469,6 @@ export function InvadersGame({
           x: shooter.x + INV_SIZE / 2,
           y: shooter.y + INV_SIZE,
         })
-        // bombs drop more often as waves increase
         s.bombTimer = Math.max(12, 55 - waveRef.current * 6)
       }
 
