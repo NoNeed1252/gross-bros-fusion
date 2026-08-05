@@ -14,7 +14,7 @@ export function PortalFooter() {
           </a>
           <span aria-hidden className="h-3 w-px bg-border" />
           <a
-            href="#terms"
+            href="/terms"
             className="transition-colors hover:text-primary hover:text-glow"
           >
             Terms of Service
