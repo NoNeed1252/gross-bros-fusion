@@ -43,7 +43,10 @@ export function ChatTab({
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({
+        message,
+        systemPrompt: bro.systemPrompt,
+      }),
     })
 
     const data = (await response.json().catch(() => null)) as
@@ -59,7 +62,7 @@ export function ChatTab({
     }
 
     return data.reply
-  }, [])
+  }, [bro.systemPrompt])
 
   const handleSend = useCallback(
     async (text: string) => {
