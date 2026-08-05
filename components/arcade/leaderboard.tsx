@@ -11,8 +11,19 @@ interface Score {
   wave: number
 }
 
+function isValidWallet(addr?: string | null): boolean {
+  if (!addr) return false
+  const a = addr.trim()
+  if (!a || a.toLowerCase() === 'anonymous') return false
+  // XRPL classic addresses start with r and are ~25–35 chars
+  if (a.startsWith('r') && a.length >= 25 && a.length <= 40) return true
+  // also allow longer modern formats just in case
+  if (a.length >= 25) return true
+  return false
+}
+
 function truncateAddress(addr: string) {
-  if (!addr || addr.length <= 10) return addr || 'Anonymous'
+  if (addr.length <= 12) return addr
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
@@ -34,14 +45,38 @@ export function Leaderboard() {
           .from('leaderboard')
           .select('*')
           .order('score', { ascending: false })
-          .limit(20)
+          .limit(50)
 
         if (err) {
           console.error('Leaderboard error:', err)
           setError('Could not load scores')
           return
         }
-        setEntries((data as Score[]) || [])
+
+        // Only keep real wallets (holders who connected)
+        const filtered = ((data as Score[]) || [])
+          .filter((row) => {
+            const addr = row.wallet_address || row.address
+            return isValidWallet(addr)
+          })
+          // keep best score per wallet
+          .reduce((acc: Score[], row) => {
+            const addr = (row.wallet_address || row.address || '').toLowerCase()
+            const existing = acc.find(
+              (e) =>
+                (e.wallet_address || e.address || '').toLowerCase() === addr
+            )
+            if (!existing) {
+              acc.push(row)
+            } else if (row.score > existing.score) {
+              Object.assign(existing, row)
+            }
+            return acc
+          }, [])
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 20)
+
+        setEntries(filtered)
       } catch (e) {
         console.error(e)
         setError('Could not load scores')
@@ -60,8 +95,11 @@ export function Leaderboard() {
           Leaderboard
         </p>
         <h3 className="text-lg font-semibold tracking-tight text-foreground">
-          Top Pilots
+          Top Holder Pilots
         </h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Only connected Gross Bro holders qualify for giveaways
+        </p>
       </div>
 
       {loading && (
@@ -78,7 +116,7 @@ export function Leaderboard() {
 
       {!loading && !error && entries.length === 0 && (
         <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-          No scores yet — be the first.
+          No holder scores yet — connect your wallet and play.
         </div>
       )}
 
@@ -88,14 +126,14 @@ export function Leaderboard() {
             <thead>
               <tr className="border-b border-border/40 text-left font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                 <th className="px-4 py-2.5">Rank</th>
-                <th className="px-4 py-2.5">Pilot</th>
+                <th className="px-4 py-2.5">Wallet</th>
                 <th className="px-4 py-2.5">Score</th>
                 <th className="px-4 py-2.5">Wave</th>
               </tr>
             </thead>
             <tbody>
               {entries.map((entry, idx) => {
-                const addr = entry.wallet_address || entry.address || 'Anonymous'
+                const addr = entry.wallet_address || entry.address || ''
                 return (
                   <tr
                     key={entry.id ?? idx}
