@@ -186,7 +186,7 @@ export default function Page() {
             }}
           />
         )}
-        {tab === 'arcade' && <ArcadeTab bro={bro} />}
+        {tab === 'arcade' && <ArcadeTab bro={bro} walletAddress={address} />}
       </main>
       <PortalFooter />
       <PortalBottomNav activeTab={tab} setActiveTab={setTab} />
