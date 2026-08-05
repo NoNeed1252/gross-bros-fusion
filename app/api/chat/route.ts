@@ -3,120 +3,24 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
-const ONTHEDEX_URL = 'https://api.onthedex.live/public/v1';
-const TIMEOUT_MS = 10000;
+const XRPL = 'https://api.xrpl.to/v1';
+const OTD = 'https://api.onthedex.live/public/v1';
+const OR = 'https://openrouter.ai/api/v1/chat/completions';
+const MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
 
-type ChatMessage = { role?: string; text?: string; content?: string };
-type Price = { symbol: string; name: string; priceUsd: number; change24h?: number; liquidityUsd?: number; source: string; identifier?: string; updatedAt: string };
-type TokenRow = { currency?: string; issuer?: string; token_name?: string; name?: string; price_mid_usd?: number; market_cap?: number; volume_usd?: number; num_trades?: number };
-type TokenResponse = { tokens?: TokenRow[]; error?: string; message?: string };
+type Msg = { role?: string; text?: string; content?: string };
+type Token = { _id?: string; md5?: string; currency?: string; issuer?: string; name?: string; token?: string; usd?: number | string; price?: number | string; exch?: number | string; priceUsd?: number | string; pro24h?: number | string; priceChange24h?: number | string; price_mid_usd?: number | string; volume_usd?: number };
 
-function json(data: unknown, init?: ResponseInit) {
-  return NextResponse.json(data, { ...init, headers: { 'Cache-Control': 'no-store', ...(init?.headers ?? {}) } });
+async function getJson<T>(url: string, init: RequestInit = {}): Promise<T> {
+  const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 10000);
+  try { const response = await fetch(url, { ...init, signal: controller.signal, cache: 'no-store', headers: { Accept: 'application/json', 'User-Agent': 'Gross-Bros-Fusion/1.0 (server-side market data)', Referer: 'https://xrpl.to/', ...(init.headers || {}) } }); if (!response.ok) throw new Error(`HTTP ${response.status}`); const value = await response.json() as T; if ((value as any)?.error) throw new Error((value as any).message || (value as any).error); return value; } finally { clearTimeout(timer); }
 }
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    const response = await fetch(url, { ...init, signal: controller.signal, cache: 'no-store', headers: { Accept: 'application/json', ...(init?.headers ?? {}) } });
-    if (!response.ok) throw new Error(`Upstream HTTP ${response.status}`);
-    const value = await response.json() as T;
-    if (value && typeof value === 'object' && 'error' in value && (value as { error?: string }).error) throw new Error((value as { message?: string }).message || (value as { error: string }).error);
-    return value;
-  } finally { clearTimeout(timer); }
-}
-
-async function getXrpPrice(): Promise<Price> {
-  const data = await fetchJson<Record<string, { usd?: number; usd_24h_change?: number }>>('https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd&include_24hr_change=true');
-  const quote = data.ripple;
-  if (!quote?.usd || !Number.isFinite(quote.usd)) throw new Error('XRP USD price unavailable');
-  return { symbol: 'XRP', name: 'XRP', priceUsd: quote.usd, change24h: quote.usd_24h_change, source: 'CoinGecko', updatedAt: new Date().toISOString() };
-}
-
-async function resolveToken(query: string): Promise<TokenRow> {
-  const requested = query.trim().toLowerCase();
-  const pages = await Promise.all([1, 2, 3].map((page) => fetchJson<TokenResponse>(`${ONTHEDEX_URL}/daily/tokens?by=volume&min_trades=1&page=${page}&per_page=100`)));
-  const rows = pages.flatMap((page) => page.tokens || []).filter((row) => row.currency && row.issuer);
-  const exact = rows.filter((row) => row.currency!.toLowerCase() === requested || row.token_name?.toLowerCase() === requested || row.name?.toLowerCase() === requested);
-  const matches = exact.length ? exact : rows.filter((row) => row.currency!.toLowerCase().includes(requested) || row.token_name?.toLowerCase().includes(requested) || row.name?.toLowerCase().includes(requested));
-  const token = matches.sort((a, b) => Number(b.volume_usd || 0) - Number(a.volume_usd || 0))[0];
-  if (!token?.currency || !token.issuer) throw new Error(`XRPL token not found: ${query}`);
-  return token;
-}
-
-async function getXrplTokenPrice(query: string): Promise<Price> {
-  let token: TokenRow;
-  const issuerMatch = query.match(/^(.*)\.?(r[1-9A-HJ-NP-Za-km-z]{24,34})$/i);
-  if (issuerMatch) token = { currency: issuerMatch[1].replace(/[.]/g, ''), issuer: issuerMatch[2] };
-  else token = await resolveToken(query);
-
-  const canonical = `${token.currency}.${token.issuer}`;
-  const data = await fetchJson<TokenResponse>(`${ONTHEDEX_URL}/aggregator?token=${encodeURIComponent(canonical)}`);
-  const result = data.tokens?.find((row) => row.currency?.toLowerCase() === token.currency!.toLowerCase() && row.issuer === token.issuer) || data.tokens?.[0];
-  const priceUsd = Number(result?.price_mid_usd ?? token.price_mid_usd);
-  if (!Number.isFinite(priceUsd) || priceUsd <= 0) throw new Error(`No USD price available for ${canonical}`);
-
-  return { symbol: token.currency, name: result?.name || result?.token_name || token.token_name || token.currency, priceUsd, source: 'OnTheDEX XRPL Ledger API', identifier: canonical, updatedAt: new Date().toISOString() };
-}
-
-function extractAsset(message: string): string | null {
-  const lower = message.toLowerCase();
-  if (!/(price|quote|worth|value|cost|trading|trade|market|how much)/.test(lower)) return null;
-  if (/\bxrp\b/.test(lower)) return 'XRP';
-  const issuer = message.match(/\br[1-9A-HJ-NP-Za-km-z]{24,34}\b/);
-  if (issuer) {
-    const before = message.slice(0, issuer.index).match(/\b[A-Za-z0-9_-]{2,20}\s*$/);
-    return before ? `${before[0].trim()}.${issuer[0]}` : issuer[0];
-  }
-  const symbol = message.match(/\b(RLUSD|SOLO|CSC|XMEME|ELS|ARMY|DROP|EQ|XAH|XCAD|USD|USDC)\b/i);
-  return symbol?.[1]?.toUpperCase() || null;
-}
-
-function normalizeMessages(body: any, latest: string): Array<{ role: 'user' | 'assistant'; content: string }> {
-  const source = Array.isArray(body?.messages) ? body.messages : [];
-  const history = source.map((message: ChatMessage) => {
-    const content = String(message.content ?? message.text ?? '').trim();
-    if (!content) return null;
-    return { role: message.role === 'assistant' || message.role === 'bro' ? 'assistant' as const : 'user' as const, content };
-  }).filter((item): item is { role: 'user' | 'assistant'; content: string } => Boolean(item)).slice(-12);
-  if (history[history.length - 1]?.content !== latest) history.push({ role: 'user', content: latest });
-  return history;
-}
-
-async function askOpenRouter(messages: Array<{ role: 'user' | 'assistant'; content: string }>, systemPrompt?: string): Promise<string> {
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error('OPENROUTER_API_KEY is not configured');
-  const data = await fetchJson<{ choices?: Array<{ message?: { content?: string } }> }>(OPENROUTER_URL, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}`, 'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://grossbros.vercel.app', 'X-Title': 'Gross Bros Fusion' },
-    body: JSON.stringify({ model: OPENROUTER_MODEL, temperature: 0.7, max_tokens: 500, messages: [{ role: 'system', content: systemPrompt || 'You are Gross Bros Fusion, a witty and helpful XRPL assistant. Answer naturally, tell jokes when asked, never claim to execute trades, and never invent live prices.' }, ...messages] }),
-  });
-  const content = data.choices?.[0]?.message?.content?.trim();
-  if (!content) throw new Error('LLM returned an empty response');
-  return content;
-}
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json().catch(() => null);
-    const latest = typeof body?.message === 'string' ? body.message.trim() : String(body?.messages?.at?.(-1)?.content ?? body?.messages?.at?.(-1)?.text ?? '').trim();
-    if (!latest) return json({ ok: false, error: 'A non-empty message is required.' }, { status: 400 });
-    const asset = extractAsset(latest);
-    if (asset) {
-      try {
-        const price = asset === 'XRP' ? await getXrpPrice() : await getXrplTokenPrice(asset);
-        return json({ ok: true, bot: false, reply: `${price.symbol} is $${price.priceUsd.toLocaleString(undefined, { maximumFractionDigits: 8 })} USD. Source: ${price.source}.`, price });
-      } catch (error) {
-        console.error('XRPL price lookup failed:', error);
-        return json({ ok: true, bot: false, reply: `I could not find a reliable live market for ${asset} right now. Try the token symbol, currency plus issuer address, or ask again shortly.` });
-      }
-    }
-    const reply = await askOpenRouter(normalizeMessages(body, latest), body?.systemPrompt);
-    return json({ ok: true, bot: false, reply, text: reply });
-  } catch (error) {
-    console.error('chat route error:', error);
-    return json({ ok: false, error: error instanceof Error ? error.message : 'Chat service unavailable' }, { status: 502 });
-  }
-}
+function number(...values: unknown[]): number | undefined { for (const value of values) { const n = Number(value); if (Number.isFinite(n) && n > 0) return n; } return undefined; }
+async function xrpPrice() { const data = await getJson<any>('https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd&include_24hr_change=true'); const p = number(data?.ripple?.usd); if (!p) throw new Error('XRP price unavailable'); return { symbol: 'XRP', name: 'XRP', priceUsd: p, change24h: data.ripple.usd_24h_change, source: 'CoinGecko', updatedAt: new Date().toISOString() }; }
+async function resolveXrpl(query: string) { const response = await getJson<{ tokens?: Token[] }>(`${XRPL}/search`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ search: query, limit: 20 }) }); const q = query.toLowerCase(); return (response.tokens || []).sort((a, b) => ((String(b.currency || '').toLowerCase() === q ? 100 : 0) + (String(b.name || '').toLowerCase() === q ? 80 : 0) + Number(b.volume_usd || 0) / 1e9) - ((String(a.currency || '').toLowerCase() === q ? 100 : 0) + (String(a.name || '').toLowerCase() === q ? 80 : 0) + Number(a.volume_usd || 0) / 1e9))[0]; }
+async function xrplPrice(query: string) { const issuer = query.match(/r[1-9A-HJ-NP-Za-km-z]{24,34}/)?.[0]; const symbol = query.replace(issuer || '', '').replace(/[.\s]/g, '') || query; const token = issuer ? { issuer, currency: symbol } : await resolveXrpl(query); if (!token?.issuer || !token?.currency) throw new Error('XRPL token not found'); const p = number(token.usd, token.priceUsd, token.price_mid_usd, token.price, token.exch); if (!p) throw new Error('XRPL token has no live USD price'); return { symbol: token.token || token.currency, name: token.name || token.currency, priceUsd: p, change24h: number(token.pro24h, token.priceChange24h), source: 'XRPL.to', identifier: `${token.issuer}.${token.currency}`, updatedAt: new Date().toISOString() }; }
+async function onTheDexPrice(query: string) { const search = await getJson<any>(`${OTD}/daily/tokens?by=volume&min_trades=1&page=1&per_page=100`); const q = query.toLowerCase(); const token = (search.tokens || []).filter((t: any) => String(t.currency || '').toLowerCase() === q || String(t.token_name || '').toLowerCase() === q || String(t.issuer || '').toLowerCase() === q).sort((a: any, b: any) => Number(b.volume_usd || 0) - Number(a.volume_usd || 0))[0]; if (!token) throw new Error('OnTheDEX token not found'); const data = await getJson<any>(`${OTD}/aggregator?token=${encodeURIComponent(`${token.currency}.${token.issuer}`)}`); const row = data.tokens?.[0] || token; const p = number(row.price_mid_usd, token.price_mid_usd); if (!p) throw new Error('OnTheDEX price unavailable'); return { symbol: token.currency, name: row.name || token.token_name || token.currency, priceUsd: p, source: 'OnTheDEX XRPL Ledger API', identifier: `${token.currency}.${token.issuer}`, updatedAt: new Date().toISOString() }; }
+function asset(text: string) { if (!/(price|quote|worth|value|cost|trading|trade|market|how much)/i.test(text)) return null; if (/\bxrp\b/i.test(text)) return 'XRP'; const address = text.match(/r[1-9A-HJ-NP-Za-km-z]{24,34}/)?.[0]; const symbol = text.match(/\b[A-Za-z][A-Za-z0-9_-]{1,15}\b/g)?.filter(x => !/price|what|current|worth|much|the|is|of|for|how|token|coin|trading/i.test(x))[0]; return address ? `${symbol || ''}.${address}` : symbol?.toUpperCase() || null; }
+function history(body: any, latest: string) { const list = Array.isArray(body?.messages) ? body.messages : []; const result = list.map((m: Msg) => { const content = String(m.content ?? m.text ?? '').trim(); if (!content) return null; return { role: m.role === 'assistant' || m.role === 'bro' ? 'assistant' as const : 'user' as const, content }; }).filter(Boolean).slice(-12) as Array<{ role: 'user' | 'assistant'; content: string }>; if (result.at(-1)?.content !== latest) result.push({ role: 'user', content: latest }); return result; }
+async function llm(messages: Array<{ role: 'user' | 'assistant'; content: string }>, prompt?: string) { if (!process.env.OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY is not configured'); const data = await getJson<any>(OR, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, 'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://grossbros.vercel.app', 'X-Title': 'Gross Bros Fusion' }, body: JSON.stringify({ model: MODEL, temperature: 0.7, max_tokens: 500, messages: [{ role: 'system', content: prompt || 'You are a witty, helpful XRPL assistant. Never invent live prices or claim to execute trades.' }, ...messages] }) }); const text = data.choices?.[0]?.message?.content?.trim(); if (!text) throw new Error('Empty LLM response'); return text; }
+export async function POST(request: Request) { try { const body = await request.json().catch(() => null); const latest = typeof body?.message === 'string' ? body.message.trim() : String(body?.messages?.at?.(-1)?.content ?? body?.messages?.at?.(-1)?.text ?? '').trim(); if (!latest) return NextResponse.json({ ok: false, error: 'A non-empty message is required.' }, { status: 400 }); const requested = asset(latest); if (requested) { try { const price = requested === 'XRP' ? await xrpPrice() : await xrplPrice(requested); return NextResponse.json({ ok: true, bot: false, reply: `${price.symbol} is $${price.priceUsd.toLocaleString(undefined, { maximumFractionDigits: 8 })} USD. Source: ${price.source}.`, price }); } catch (firstError) { console.error('XRPL.to lookup failed:', firstError); try { const price = await onTheDexPrice(requested); return NextResponse.json({ ok: true, bot: false, reply: `${price.symbol} is $${price.priceUsd.toLocaleString(undefined, { maximumFractionDigits: 8 })} USD. Source: ${price.source}.`, price }); } catch (fallbackError) { console.error('OnTheDEX lookup failed:', fallbackError); return NextResponse.json({ ok: true, bot: false, reply: `I could not find a reliable live market for ${requested} right now.` }); } } } const reply = await llm(history(body, latest), body?.systemPrompt); return NextResponse.json({ ok: true, bot: false, reply, text: reply }); } catch (error) { console.error('chat route error:', error); return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Chat service unavailable' }, { status: 502 }); } }
