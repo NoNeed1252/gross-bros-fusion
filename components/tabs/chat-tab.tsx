@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Sparkles, Zap, AlertTriangle } from 'lucide-react'
 import type { GrossBro } from '@/lib/gross-bros'
 import { NftIdentityCard } from '@/components/chat/nft-identity-card'
@@ -32,15 +32,34 @@ export function ChatTab({
     {
       id: nextId(),
       role: 'bro',
-      text: `${bro.demoReplies[0]}`,
+      text: bro.demoReplies[0],
     },
   ])
   const [typing, setTyping] = useState(false)
   const [botOn, setBotOn] = useState(false)
   const [autonomous, setAutonomous] = useState(false)
 
-  // Map display species back to key for API
-  const speciesKey = bro.traits.find(t => ['Species', 'Type', 'Class'].includes(t.type))?.value || 'Ooze'
+  const requestChatReply = useCallback(async (message: string) => {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ message }),
+    })
+
+    const data = (await response.json().catch(() => null)) as
+      | { reply?: string; error?: string }
+      | null
+
+    if (!response.ok) {
+      throw new Error(data?.error || `Chat request failed with HTTP ${response.status}`)
+    }
+
+    if (!data?.reply) {
+      throw new Error('Chat response did not contain a reply')
+    }
+
+    return data.reply
+  }, [])
 
   const handleSend = useCallback(
     async (text: string) => {
@@ -49,28 +68,20 @@ export function ChatTab({
       setTyping(true)
 
       try {
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [...messages, userMsg].filter(m => m.role !== 'system'),
-            systemPrompt: bro.systemPrompt,
-            species: speciesKey
-          }),
-        })
-
-        if (!response.ok) throw new Error('API Error')
-
-        const data = await response.json()
-        setMessages((prev) => [...prev, { id: nextId(), role: 'bro', text: data.text || 'Bleh... neural link failed.' }])
+        const reply = await requestChatReply(text)
+        setMessages((prev) => [...prev, { id: nextId(), role: 'bro', text: reply }])
       } catch (err) {
         console.error('Chat Error:', err)
-        setMessages((prev) => [...prev, { id: nextId(), role: 'system', text: 'CONNECTION ERROR' }])
+        const detail = err instanceof Error ? err.message : 'Unable to reach chat service.'
+        setMessages((prev) => [
+          ...prev,
+          { id: nextId(), role: 'system', text: `CONNECTION ERROR: ${detail}` },
+        ])
       } finally {
         setTyping(false)
       }
     },
-    [bro.systemPrompt, messages, speciesKey],
+    [requestChatReply],
   )
 
   const handleBotAction = useCallback(
@@ -81,20 +92,11 @@ export function ChatTab({
       const broReply = async (prompt: string) => {
         setTyping(true)
         try {
-          const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: [{ role: 'user', text: prompt }],
-              systemPrompt: `${bro.systemPrompt}. Provide a short, in-character reaction to this event.`,
-              species: speciesKey
-            }),
-          })
-          if (!response.ok) throw new Error('API Error')
-          const data = await response.json()
-          setMessages((prev) => [...prev, { id: nextId(), role: 'bro', text: data.text }])
+          const reply = await requestChatReply(prompt)
+          setMessages((prev) => [...prev, { id: nextId(), role: 'bro', text: reply }])
         } catch (err) {
-          push('NEURAL LINK ERROR')
+          console.error('Chat action error:', err)
+          push('NEURAL LINK ERROR: CHAT SERVICE UNAVAILABLE')
         } finally {
           setTyping(false)
         }
@@ -129,7 +131,7 @@ export function ChatTab({
         }
       }
     },
-    [botOn, autonomous, bro.systemPrompt, speciesKey],
+    [botOn, autonomous, requestChatReply],
   )
 
   if (!connected) {
@@ -138,13 +140,10 @@ export function ChatTab({
 
   return (
     <div className="mx-auto grid max-w-6xl gap-4 lg:grid-cols-[minmax(0,340px)_1fr]">
-      {/* Left: identity + bot controls */}
       <div className="space-y-4">
         <NftIdentityCard bro={bro} />
         <TradeBotPanel botOn={botOn} autonomous={autonomous} onAction={handleBotAction} />
       </div>
-
-      {/* Right: chat */}
       <div className="h-[560px] min-h-[520px] lg:h-[720px]">
         <ChatPanel bro={bro} messages={messages} typing={typing} onSend={handleSend} />
       </div>
@@ -208,7 +207,7 @@ function ConnectGate({
 
       <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
         <Zap className="size-3.5 text-primary" />
-        Powered by XRPL · Xaman · OpenRouter
+        Powered by XRPL · Xaman · Basic Chatbot
       </div>
     </div>
   )
