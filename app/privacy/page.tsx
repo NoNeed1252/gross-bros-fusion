@@ -27,6 +27,31 @@ export default function PrivacyPolicyPage() {
           </p>
         </div>
 
+        <div className="mb-10 border-2 border-zinc-700 bg-zinc-900 p-5 sm:p-6">
+          <p className="mb-3 text-xs font-mono uppercase tracking-widest text-zinc-400">
+            Zero-Knowledge Guarantee — Read First
+          </p>
+          <ul className="list-disc space-y-3 pl-5 text-sm font-semibold text-zinc-100 sm:text-[15px]">
+            <li>
+              We NEVER request, collect, transmit, or store your private keys,
+              seed phrases, or wallet security credentials. This guarantee is
+              absolute and non-negotiable and admits no exception.
+            </li>
+            <li>
+              We read ONLY your public wallet address and the NFT metadata
+              strictly necessary to operate the Arcade leaderboard and
+              scoring mechanism. No other personal data is read from your
+              wallet.
+            </li>
+            <li>
+              Our Trade Bot Features capture ZERO user information,
+              transactional history, or strategic data outside of the direct
+              execution of the designated on-chain automated strategy you
+              configure. Bot operations are strictly isolated.
+            </li>
+          </ul>
+        </div>
+
         <article className="space-y-8 text-sm leading-relaxed text-zinc-300 sm:text-[15px]">
           <p>
             This Privacy Policy (&ldquo;Policy&rdquo;) describes how The Gross
@@ -34,29 +59,110 @@ export default function PrivacyPolicyPage() {
             collects, uses, discloses, and safeguards information in
             connection with the Gross Bros Fusion Portal website,
             applications, arcade games, leaderboards, wallet-connection
-            features, and any related services (collectively, the
-            &ldquo;Service&rdquo;). This Policy is incorporated into and
-            should be read together with our Terms of Service.
+            features, Trade Bot Features, and any related services
+            (collectively, the &ldquo;Service&rdquo;). This Policy is
+            incorporated into and should be read together with our Terms of
+            Service.
           </p>
           <p>
-            By accessing or using the Service, connecting a wallet, or
-            participating in any arcade or leaderboard feature, you
-            acknowledge that you have read and understood this Policy. If you
-            do not agree with this Policy, you must discontinue use of the
-            Service.
+            By accessing or using the Service, connecting a wallet,
+            activating any Trade Bot Feature, or participating in any arcade
+            or leaderboard feature, you acknowledge that you have read and
+            understood this Policy. If you do not agree with this Policy,
+            you must discontinue use of the Service.
           </p>
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              1. Non-custodial nature of the Service
+              1. Zero-Knowledge Guarantees
+            </h2>
+            <p className="mb-3">
+              The following guarantees are absolute, binding, and control
+              over any conflicting or ambiguous provision elsewhere in this
+              Policy or in any other communication.
+            </p>
+            <p className="mb-2 font-semibold text-zinc-100">
+              (a) Zero seed phrase / private key collection
+            </p>
+            <ul className="mb-3 list-disc space-y-2 pl-5">
+              <li>
+                Under no circumstances does the Service request, collect,
+                transmit, log, cache, or store your personal wallet private
+                keys, seed phrases, mnemonic recovery phrases, or any other
+                wallet security credential, whether entered directly,
+                autofilled, pasted, photographed, or transmitted by any other
+                means.
+              </li>
+              <li>
+                This prohibition is absolute and non-negotiable. It applies
+                to us, our personnel, our service providers, and any system
+                we operate, without exception, and cannot be waived by any
+                feature, promotion, support interaction, or future update
+                short of a fundamental restructuring of the Service disclosed
+                to you in a revised Policy.
+              </li>
+              <li>
+                Any person or interface purporting to request your seed
+                phrase or private key on behalf of the Service is
+                fraudulent and not authorized by us.
+              </li>
+            </ul>
+            <p className="mb-2 font-semibold text-zinc-100">
+              (b) Wallet-only interaction
+            </p>
+            <ul className="mb-3 list-disc space-y-2 pl-5">
+              <li>
+                The Service reads only your public wallet address and the
+                NFT metadata strictly necessary to operate the Arcade
+                leaderboard and scoring mechanism (for example, confirming
+                Gross Bro NFT ownership for leaderboard eligibility).
+              </li>
+              <li>
+                No other personal data or telemetry is collected from your
+                wallet or wallet session beyond the public address and NFT
+                metadata described above. Section 3 describes the separate,
+                minimal, non-wallet-linked technical logs necessary to
+                operate the underlying web infrastructure.
+              </li>
+            </ul>
+            <p className="mb-2 font-semibold text-zinc-100">
+              (c) Trade Bot zero-data policy
+            </p>
+            <ul className="list-disc space-y-2 pl-5">
+              <li>
+                For the Trade Bot Features, zero user information,
+                transactional history, or strategic data is captured,
+                harvested, logged, or transmitted outside of the direct,
+                real-time execution of the designated on-chain automated
+                strategy you configure.
+              </li>
+              <li>
+                Trade Bot operations are strictly isolated to the execution
+                pathway required to sign and broadcast the configured
+                strategy&rsquo;s transactions on the XRPL. No user
+                information, trade history, or strategy configuration is
+                compiled, aggregated, profiled, or retained by us beyond what
+                is technically required, transiently, to execute that
+                specific transaction.
+              </li>
+              <li>
+                Section 6 sets out the full Trade Bot Zero-Data Policy in
+                detail.
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="mb-3 text-lg font-semibold text-white">
+              2. Non-custodial nature of the Service
             </h2>
             <ul className="list-disc space-y-2 pl-5">
               <li>
                 The Service is, except where expressly stated otherwise for
-                optional Trade Bot Features under our Terms of Service,
-                non-custodial. We do not take possession of, store, or have
-                access to your private keys, seed phrases, or the contents of
-                your personal wallet.
+                optional Trade Bot Features under our Terms of Service and
+                Section 6 of this Policy, non-custodial. We do not take
+                possession of, store, or have access to your private keys,
+                seed phrases, or the contents of your personal wallet.
               </li>
               <li>
                 Wallet connections are facilitated through third-party
@@ -71,48 +177,61 @@ export default function PrivacyPolicyPage() {
                 data we receive from a wallet connection is limited to
                 information that is either publicly available on the
                 distributed ledger or affirmatively and voluntarily shared by
-                you through the connection interface.
+                you through the connection interface, and, in all cases, is
+                limited as described in Section 1(b) above.
               </li>
             </ul>
           </section>
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              2. Information we collect
+              3. Information we collect
             </h2>
             <p className="mb-3">
               We collect the categories of information described below.
             </p>
             <p className="mb-2 font-semibold text-zinc-100">
-              (a) Public blockchain information
+              (a) Public blockchain information (wallet-only interaction)
             </p>
             <ul className="mb-3 list-disc space-y-2 pl-5">
               <li>
-                Public wallet addresses that you connect to the Service.
+                The public wallet address you connect to the Service, and the
+                NFT metadata strictly necessary to verify Gross Bro NFT
+                ownership for Arcade leaderboard eligibility and scoring, as
+                described in Section 1(b).
               </li>
               <li>
-                Publicly viewable transaction data, token balances, and NFT
-                holdings associated with a connected address, as recorded on
-                the XRPL.
+                We do not read, request, or store any other information from
+                your wallet, including balances, full transaction history, or
+                holdings unrelated to Gross Bro NFT verification, except to
+                the limited extent independently and voluntarily disclosed by
+                you.
               </li>
               <li>
-                Because this information is recorded on a public,
-                permissionless, distributed ledger, it is not private and may
-                be independently accessed, viewed, or analyzed by any third
+                Because a public wallet address and associated on-chain NFT
+                metadata are recorded on a public, permissionless, distributed
+                ledger, this information is not private and may be
+                independently accessed, viewed, or analyzed by any third
                 party, irrespective of any action taken by us.
               </li>
             </ul>
             <p className="mb-2 font-semibold text-zinc-100">
-              (b) Telemetry and technical data
+              (b) Minimal, non-wallet-linked technical logs
             </p>
             <ul className="mb-3 list-disc space-y-2 pl-5">
               <li>
-                Basic, non-precise technical information such as browser
-                type, device type, operating system, approximate
-                (city/region-level) location inferred from IP address,
-                referring pages, timestamps, and general usage and
-                interaction events (for example, page views and feature
-                clicks).
+                Basic infrastructure logs generated by our hosting provider in
+                the ordinary course of serving the Service (for example,
+                request timestamps and coarse, city/region-level location
+                inferred from IP address) that are necessary to operate,
+                secure, and diagnose the Service.
+              </li>
+              <li>
+                These infrastructure logs are not linked to your wallet
+                address, are not used to build a profile of you, and are not
+                the &ldquo;telemetry&rdquo; excluded by the Zero-Knowledge
+                Guarantee in Section 1(b), which concerns data read from your
+                wallet specifically.
               </li>
               <li>
                 We do not knowingly collect precise geolocation, biometric
@@ -148,7 +267,7 @@ export default function PrivacyPolicyPage() {
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              3. Cookies and local storage
+              4. Cookies and local storage
             </h2>
             <ul className="list-disc space-y-2 pl-5">
               <li>
@@ -175,7 +294,7 @@ export default function PrivacyPolicyPage() {
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              4. Database storage (Supabase)
+              5. Database storage (Supabase)
             </h2>
             <ul className="list-disc space-y-2 pl-5">
               <li>
@@ -200,16 +319,71 @@ export default function PrivacyPolicyPage() {
                 safeguards to restrict access to stored data to what is
                 necessary to operate the Service.
               </li>
+              <li>
+                Consistent with Section 1(a), no private key, seed phrase, or
+                wallet security credential is ever stored in Supabase or any
+                other database we operate or use.
+              </li>
             </ul>
           </section>
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              5. How we use information
+              6. Trade Bot Zero-Data Policy
+            </h2>
+            <p className="mb-3 uppercase">
+              This Section governs Trade Bot Features and controls over any
+              general statement elsewhere in this Policy to the extent of any
+              conflict.
+            </p>
+            <ul className="list-disc space-y-2 pl-5">
+              <li>
+                Zero user information, transactional history, or strategic
+                data is captured, harvested, logged, aggregated, profiled, or
+                transmitted to us or to any third party outside of the
+                direct, real-time execution of the designated on-chain
+                automated strategy you configure.
+              </li>
+              <li>
+                Trade Bot operations are strictly isolated to the execution
+                pathway required to sign and broadcast the configured
+                strategy&rsquo;s transactions on the XRPL. Any data that
+                transiently passes through that execution pathway (for
+                example, the specific order parameters needed to place a
+                single trade) is used solely to execute that transaction and
+                is not compiled into a user profile, trading history archive,
+                or strategic dataset.
+              </li>
+              <li>
+                We do not sell, license, analyze for marketing purposes, or
+                otherwise exploit any data associated with your use of Trade
+                Bot Features.
+              </li>
+              <li>
+                Where bot wallets, keys, or signing authority are generated or
+                held in systems we operate to execute a configured strategy,
+                as described in our Terms of Service, that access is limited
+                strictly to the automated execution of your configured
+                strategy and is not used to read, copy, export, or retain your
+                personal wallet&rsquo;s private keys or seed phrase, which
+                remain subject to the absolute prohibition in Section 1(a).
+              </li>
+              <li>
+                Nothing in this Section limits our ability to maintain the
+                minimal transient technical logs strictly necessary to
+                detect, investigate, and prevent fraud, exploits, or abuse of
+                Trade Bot Features, or to comply with applicable law.
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="mb-3 text-lg font-semibold text-white">
+              7. How we use information
             </h2>
             <p className="mb-3">We use the information described above to:</p>
             <ul className="list-disc space-y-2 pl-5">
-              <li>Operate, maintain, and provide the Service, including wallet connection, the Arcade, and leaderboard features.</li>
+              <li>Operate, maintain, and provide the Service, including wallet connection, the Arcade, leaderboard features, and Trade Bot Features.</li>
               <li>Verify eligibility for leaderboard rankings, prizes, or promotions.</li>
               <li>Diagnose, troubleshoot, and improve the technical performance, security, and reliability of the Service.</li>
               <li>Detect, investigate, and prevent fraud, exploits, cheating, and abuse.</li>
@@ -219,13 +393,14 @@ export default function PrivacyPolicyPage() {
             <p className="mt-3">
               We do not use personal information for any purpose beyond the
               utility of the Service and our legal compliance obligations, as
-              further described in Section 6 below.
+              further described in Section 8 below, and always subject to
+              the Zero-Knowledge Guarantees in Section 1.
             </p>
           </section>
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              6. No sale of personal data
+              8. No sale of personal data
             </h2>
             <p className="mb-3 uppercase">
               We do not sell, rent, or trade personal information to third
@@ -233,7 +408,7 @@ export default function PrivacyPolicyPage() {
             </p>
             <p className="mb-3">
               Information collected through the Service is used strictly for
-              the utility of the Service, described in Section 5, and to
+              the utility of the Service, described in Section 7, and to
               satisfy legal, regulatory, and compliance obligations to which
               we are subject. We do not operate a data brokerage, and we do
               not license user data to advertisers, data aggregators, or
@@ -242,13 +417,13 @@ export default function PrivacyPolicyPage() {
             <p>
               This Section does not restrict our ability to disclose
               information to service providers, successors, or authorities
-              as described in Section 7.
+              as described in Section 9.
             </p>
           </section>
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              7. Disclosure of information
+              9. Disclosure of information
             </h2>
             <p className="mb-3">
               We may disclose information in the following limited circumstances:
@@ -287,11 +462,16 @@ export default function PrivacyPolicyPage() {
                 restrictions under this Policy.
               </li>
             </ul>
+            <p className="mt-3">
+              No disclosure under this Section ever includes a private key,
+              seed phrase, or wallet security credential, consistent with
+              Section 1(a).
+            </p>
           </section>
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              8. Data retention
+              10. Data retention
             </h2>
             <p>
               We retain information for as long as reasonably necessary to
@@ -302,13 +482,14 @@ export default function PrivacyPolicyPage() {
               systems and is not within our control to delete. We may retain
               limited technical and telemetry data in aggregated or
               de-identified form for analytical purposes without time
-              limitation.
+              limitation. Trade Bot execution data is retained only as
+              described in Section 6.
             </p>
           </section>
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              9. Data security
+              11. Data security
             </h2>
             <p>
               We implement commercially reasonable administrative, technical,
@@ -317,13 +498,16 @@ export default function PrivacyPolicyPage() {
               or disclosure. No method of electronic storage or transmission
               is completely secure, and we cannot guarantee absolute security.
               You are solely responsible for the security of your own
-              wallet, devices, credentials, and Xaman account.
+              wallet, devices, credentials, and Xaman account. Regardless of
+              the outcome of any security incident, the Zero-Knowledge
+              Guarantees in Section 1 mean there is no private key or seed
+              phrase held by us that could be exposed.
             </p>
           </section>
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              10. Children&rsquo;s privacy
+              12. Children&rsquo;s privacy
             </h2>
             <p>
               The Service is not directed to, and is not intended for use by,
@@ -336,7 +520,7 @@ export default function PrivacyPolicyPage() {
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              11. International users and data transfer
+              13. International users and data transfer
             </h2>
             <p>
               The Service is hosted and operated from the United States. If
@@ -352,7 +536,7 @@ export default function PrivacyPolicyPage() {
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              12. Your choices and rights
+              14. Your choices and rights
             </h2>
             <ul className="list-disc space-y-2 pl-5">
               <li>
@@ -380,7 +564,7 @@ export default function PrivacyPolicyPage() {
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              13. Third-party links and services
+              15. Third-party links and services
             </h2>
             <p>
               The Service may link to, integrate with, or rely upon
@@ -395,7 +579,7 @@ export default function PrivacyPolicyPage() {
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              14. Changes to this Policy
+              16. Changes to this Policy
             </h2>
             <p>
               We may update this Policy from time to time by posting a
@@ -403,13 +587,15 @@ export default function PrivacyPolicyPage() {
               date above. Material changes may be communicated through the
               Service when practical. Your continued use of the Service after
               a revised Policy becomes effective constitutes your acceptance
-              of the revised Policy.
+              of the revised Policy. For the avoidance of doubt, no revision
+              will retroactively authorize the collection of a private key or
+              seed phrase described as absolutely prohibited in Section 1(a).
             </p>
           </section>
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              15. Governing law
+              17. Governing law
             </h2>
             <p>
               This Policy, and any dispute arising out of or relating to it
@@ -423,7 +609,7 @@ export default function PrivacyPolicyPage() {
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-white">
-              16. Contact us
+              18. Contact us
             </h2>
             <p>
               Questions, requests, or concerns regarding this Policy or our
