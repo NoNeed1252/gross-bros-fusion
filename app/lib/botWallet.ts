@@ -1,7 +1,5 @@
-import 'server-only';
-
 import crypto from 'crypto';
-import { Wallet } from 'xrpl';
+import { isValidClassicAddress, Wallet } from 'xrpl';
 
 interface BotWalletRecord {
   nft_id: string;
@@ -25,11 +23,10 @@ function getMasterKey(): Buffer {
   return Buffer.from(value, 'hex');
 }
 
-const MASTER_KEY = getMasterKey();
-
 function encryptSeed(seed: string): string {
+  const masterKey = getMasterKey();
   const iv = crypto.randomBytes(IV_BYTES);
-  const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, MASTER_KEY, iv);
+  const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, masterKey, iv);
   const ciphertext = Buffer.concat([cipher.update(seed, 'utf8'), cipher.final()]);
   const authTag = cipher.getAuthTag();
 
@@ -55,6 +52,7 @@ function decodeBase64(value: unknown, fieldName: string): Buffer {
 }
 
 function decryptSeed(encryptedSeed: string): string {
+  const masterKey = getMasterKey();
   let envelope: unknown;
   try {
     envelope = JSON.parse(encryptedSeed);
@@ -85,7 +83,7 @@ function decryptSeed(encryptedSeed: string): string {
     throw new Error('Encrypted bot wallet seed ciphertext is empty');
   }
 
-  const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, MASTER_KEY, iv);
+  const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, masterKey, iv);
   decipher.setAuthTag(authTag);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
 }
@@ -99,16 +97,9 @@ function validateNftId(nftId: string): void {
 function validateOwnerAddress(ownerAddress: string): void {
   if (
     typeof ownerAddress !== 'string' ||
-    !/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(ownerAddress)
+    !/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(ownerAddress) ||
+    !isValidClassicAddress(ownerAddress)
   ) {
-    throw new Error('ownerAddress must be a valid-looking XRPL classic address');
-  }
-
-  try {
-    if (!Wallet.isValidAddress(ownerAddress)) {
-      throw new Error('invalid address');
-    }
-  } catch {
     throw new Error('ownerAddress must be a valid XRPL classic address');
   }
 }
