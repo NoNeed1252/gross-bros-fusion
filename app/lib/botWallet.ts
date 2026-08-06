@@ -1,187 +1,211 @@
-import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
-import { Wallet } from 'xrpl';
+import 'server-only';
 
-/**
- * Utility for handling bot wallets associated with Gross Bros NFTs.
- * Supports generation, encryption, storage (Supabase or local JSON), and retrieval.
- */
+import crypto from 'crypto';
+import { Wallet } from 'xrpl';
 
 interface BotWalletRecord {
   nft_id: string;
   address: string;
-  encrypted_seed: string; // base64
+  encrypted_seed: string;
   owner: string;
-  created_at: string; // ISO timestamp
+  created_at: string;
 }
 
-/** Derive a 32‑byte AES‑256‑GCM key.
- * Prefer BOT_WALLET_MASTER_KEY (hex). If absent, fall back to PBKDF2 using a static salt.
- */
+const ENCRYPTION_VERSION = 1;
+const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
+const IV_BYTES = 12;
+const AUTH_TAG_BYTES = 16;
+const MIN_CIPHERTEXT_BYTES = 1;
+
 function getMasterKey(): Buffer {
-  const envKey = process.env.BOT_WALLET_MASTER_KEY;
-  if (envKey) {
-    try {
-      const buf = Buffer.from(envKey, 'hex');
-      if (buf.length !== 32) throw new Error('Invalid length');
-      return buf;
-    } catch (e) {
-      console.warn('BOT_WALLET_MASTER_KEY is malformed, falling back to derived key');
-    }
+  const value = process.env.BOT_WALLET_MASTER_KEY;
+  if (!value || !/^[0-9a-fA-F]{64}$/.test(value)) {
+    throw new Error('BOT_WALLET_MASTER_KEY must be exactly 64 hexadecimal characters');
   }
-  // fallback: derive from a static secret (could be app id) and a salt
-  const password = process.env.NEXT_PUBLIC_APP_ID || 'gross-bros-fusion-fallback';
-  const salt = 'bot-wallet-salt';
-  console.warn('BOT_WALLET_MASTER_KEY missing – using PBKDF2 derived key');
-  return crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+  return Buffer.from(value, 'hex');
 }
 
 const MASTER_KEY = getMasterKey();
 
 function encryptSeed(seed: string): string {
-  const iv = crypto.randomBytes(12); // 96‑bit nonce for GCM
-  const cipher = crypto.createCipheriv('aes-256-gcm', MASTER_KEY, iv);
-  const encrypted = Buffer.concat([cipher.update(seed, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  // Store iv + auth tag + ciphertext, base64 encoded
-  return Buffer.concat([iv, tag, encrypted]).toString('base64');
+  const iv = crypto.randomBytes(IV_BYTES);
+  const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, MASTER_KEY, iv);
+  const ciphertext = Buffer.concat([cipher.update(seed, 'utf8'), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+
+  return JSON.stringify({
+    version: ENCRYPTION_VERSION,
+    algorithm: ENCRYPTION_ALGORITHM,
+    iv: iv.toString('base64'),
+    authTag: authTag.toString('base64'),
+    ciphertext: ciphertext.toString('base64'),
+  });
 }
 
-function decryptSeed(blob: string): string {
-  const data = Buffer.from(blob, 'base64');
-  const iv = data.slice(0, 12);
-  const tag = data.slice(12, 28);
-  const encrypted = data.slice(28);
-  const decipher = crypto.createDecipheriv('aes-256-gcm', MASTER_KEY, iv);
-  decipher.setAuthTag(tag);
-  const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-  return decrypted.toString('utf8');
+function decodeBase64(value: unknown, fieldName: string): Buffer {
+  if (typeof value !== 'string' || value.length === 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) {
+    throw new Error(`Encrypted bot wallet seed has invalid ${fieldName} base64`);
+  }
+
+  const decoded = Buffer.from(value, 'base64');
+  if (decoded.toString('base64').replace(/=+$/, '') !== value.replace(/=+$/, '')) {
+    throw new Error(`Encrypted bot wallet seed has invalid ${fieldName} base64`);
+  }
+  return decoded;
 }
 
-/** Supabase helper – insert or upsert a record. */
-async function supabaseUpsert(record: BotWalletRecord): Promise<void> {
-  const url = process.env.SUPABASE_URL || 'https://bwvnhlmvyjuowyyltraw.supabase.co';
+function decryptSeed(encryptedSeed: string): string {
+  let envelope: unknown;
+  try {
+    envelope = JSON.parse(encryptedSeed);
+  } catch {
+    throw new Error('Encrypted bot wallet seed is not a valid JSON envelope');
+  }
+
+  if (!envelope || typeof envelope !== 'object') {
+    throw new Error('Encrypted bot wallet seed envelope is invalid');
+  }
+
+  const value = envelope as Record<string, unknown>;
+  if (value.version !== ENCRYPTION_VERSION || value.algorithm !== ENCRYPTION_ALGORITHM) {
+    throw new Error('Encrypted bot wallet seed uses an unsupported format');
+  }
+
+  const iv = decodeBase64(value.iv, 'IV');
+  const authTag = decodeBase64(value.authTag, 'authentication tag');
+  const ciphertext = decodeBase64(value.ciphertext, 'ciphertext');
+
+  if (iv.length !== IV_BYTES) {
+    throw new Error(`Encrypted bot wallet seed IV must be ${IV_BYTES} bytes`);
+  }
+  if (authTag.length !== AUTH_TAG_BYTES) {
+    throw new Error(`Encrypted bot wallet seed authentication tag must be ${AUTH_TAG_BYTES} bytes`);
+  }
+  if (ciphertext.length < MIN_CIPHERTEXT_BYTES) {
+    throw new Error('Encrypted bot wallet seed ciphertext is empty');
+  }
+
+  const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, MASTER_KEY, iv);
+  decipher.setAuthTag(authTag);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+}
+
+function validateNftId(nftId: string): void {
+  if (typeof nftId !== 'string' || nftId.trim().length === 0 || nftId.length > 255 || /[\u0000-\u001f\u007f]/.test(nftId)) {
+    throw new Error('nftId must be a non-empty string of at most 255 characters without control characters');
+  }
+}
+
+function validateOwnerAddress(ownerAddress: string): void {
+  if (
+    typeof ownerAddress !== 'string' ||
+    !/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(ownerAddress)
+  ) {
+    throw new Error('ownerAddress must be a valid-looking XRPL classic address');
+  }
+
+  try {
+    if (!Wallet.isValidAddress(ownerAddress)) {
+      throw new Error('invalid address');
+    }
+  } catch {
+    throw new Error('ownerAddress must be a valid XRPL classic address');
+  }
+}
+
+function getSupabaseConfig(): { url: string; key: string } {
+  const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) throw new Error('Supabase service key missing');
-  const resp = await fetch(`${url}/rest/v1/bot_wallets`, {
+  if (!url) throw new Error('SUPABASE_URL is required for bot wallet persistence');
+  if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for bot wallet persistence');
+  return { url: url.replace(/\/$/, ''), key };
+}
+
+async function fetchBotWallet(nftId: string): Promise<BotWalletRecord | null> {
+  validateNftId(nftId);
+  const { url, key } = getSupabaseConfig();
+  const response = await fetch(
+    `${url}/rest/v1/bot_wallets?nft_id=eq.${encodeURIComponent(nftId)}&select=nft_id,address,encrypted_seed,owner,created_at`,
+    {
+      method: 'GET',
+      headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
+    },
+  );
+
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(`Supabase bot wallet lookup failed: ${response.status} ${details}`);
+  }
+
+  const rows = (await response.json()) as BotWalletRecord[];
+  return rows[0] ?? null;
+}
+
+async function insertBotWallet(record: BotWalletRecord): Promise<BotWalletRecord> {
+  const { url, key } = getSupabaseConfig();
+  const response = await fetch(`${url}/rest/v1/bot_wallets`, {
     method: 'POST',
     headers: {
       apikey: key,
       Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates', // upsert on primary key (nft_id)
+      Accept: 'application/json',
+      Prefer: 'return=representation,resolution=ignore-duplicates',
     },
     body: JSON.stringify(record),
   });
-  if (!resp.ok) {
-    const txt = await resp.text();
-    throw new Error(`Supabase upsert failed: ${resp.status} ${txt}`);
+
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(`Supabase bot wallet insert failed: ${response.status} ${details}`);
   }
-}
 
-/** Supabase fetch by nft_id */
-async function supabaseFetch(nftId: string): Promise<BotWalletRecord | null> {
-  const url = process.env.SUPABASE_URL || 'https://bwvnhlmvyjuowyyltraw.supabase.co';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) return null;
-  const resp = await fetch(`${url}/rest/v1/bot_wallets?nft_id=eq.${encodeURIComponent(nftId)}`, {
-    method: 'GET',
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      Accept: 'application/json',
-    },
-  });
-  if (!resp.ok) return null;
-  const rows = (await resp.json()) as BotWalletRecord[];
-  return rows[0] || null;
-}
+  const rows = (await response.json()) as BotWalletRecord[];
+  if (rows[0]) return rows[0];
 
-/** Local JSON fallback path */
-const LOCAL_DB_PATH = '/tmp/bot-wallets.json';
-
-function ensureLocalDb(): BotWalletRecord[] {
-  try {
-    if (fs.existsSync(LOCAL_DB_PATH)) {
-      const raw = fs.readFileSync(LOCAL_DB_PATH, 'utf8');
-      return JSON.parse(raw) as BotWalletRecord[];
-    }
-  } catch (e) {
-    console.error('Failed to read local bot wallet db', e);
+  const existing = await fetchBotWallet(record.nft_id);
+  if (!existing) {
+    throw new Error('Bot wallet insert returned no record and no existing wallet was found');
   }
-  return [];
+  return existing;
 }
 
-function writeLocalDb(records: BotWalletRecord[]): void {
-  try {
-    fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(records, null, 2), 'utf8');
-  } catch (e) {
-    console.error('Failed to write local bot wallet db', e);
-  }
-}
-
-/** Store a wallet record using Supabase if possible, otherwise local file. */
-async function storeRecord(record: BotWalletRecord): Promise<void> {
-  try {
-    await supabaseUpsert(record);
-  } catch (e) {
-    console.warn('Supabase store failed, falling back to local JSON', e);
-    const records = ensureLocalDb();
-    const idx = records.findIndex(r => r.nft_id === record.nft_id);
-    if (idx >= 0) records[idx] = record; else records.push(record);
-    writeLocalDb(records);
-  }
-}
-
-/** Retrieve a wallet record, preferring Supabase, then local file. */
-async function getRecord(nftId: string): Promise<BotWalletRecord | null> {
-  try {
-    const rec = await supabaseFetch(nftId);
-    if (rec) return rec;
-  } catch (e) {
-    console.warn('Supabase fetch failed, trying local', e);
-  }
-  const records = ensureLocalDb();
-  return records.find(r => r.nft_id === nftId) || null;
-}
-
-/** Generate (or re‑use) a classic XRPL wallet for a given NFT. */
 export async function generateBotWallet(nftId: string, ownerAddress: string): Promise<string> {
-  // Check if already exists
-  const existing = await getRecord(nftId);
+  validateNftId(nftId);
+  validateOwnerAddress(ownerAddress);
+
+  const existing = await fetchBotWallet(nftId);
   if (existing) {
-    // Decrypt and return address
+    if (existing.owner !== ownerAddress) {
+      throw new Error('Existing bot wallet owner does not match the requested owner');
+    }
     return existing.address;
   }
-  // Create a new classic wallet (seed based)
+
   const wallet = Wallet.generate();
-  const encrypted = encryptSeed(wallet.seed);
   const record: BotWalletRecord = {
     nft_id: nftId,
     address: wallet.classicAddress,
-    encrypted_seed: encrypted,
+    encrypted_seed: encryptSeed(wallet.seed),
     owner: ownerAddress,
     created_at: new Date().toISOString(),
   };
-  await storeRecord(record);
-  return wallet.classicAddress;
-}
 
-/** Retrieve and decrypt the seed for a bot wallet. */
-export async function getBotWalletSeed(nftId: string): Promise<string | null> {
-  const rec = await getRecord(nftId);
-  if (!rec) return null;
-  try {
-    return decryptSeed(rec.encrypted_seed);
-  } catch (e) {
-    console.error('Failed to decrypt bot wallet seed', e);
-    return null;
+  const stored = await insertBotWallet(record);
+  if (stored.owner !== ownerAddress) {
+    throw new Error('Stored bot wallet owner does not match the requested owner');
   }
+  return stored.address;
 }
 
-/** Retrieve the classic address for a bot wallet (no decryption needed). */
+export async function getBotWalletSeed(nftId: string): Promise<string | null> {
+  validateNftId(nftId);
+  const record = await fetchBotWallet(nftId);
+  return record ? decryptSeed(record.encrypted_seed) : null;
+}
+
 export async function getBotWalletAddress(nftId: string): Promise<string | null> {
-  const rec = await getRecord(nftId);
-  return rec?.address || null;
+  validateNftId(nftId);
+  const record = await fetchBotWallet(nftId);
+  return record?.address ?? null;
 }
