@@ -16,14 +16,14 @@ if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANO
 const GAME_W = 640
 const GAME_H = 560
 
-// Bigger ship so the NFT is readable on mobile
-const PLAYER_W = 80
-const PLAYER_H = 80
-const PLAYER_Y = GAME_H - 96
-const PLAYER_SPEED_BASE = 9
+// Ship size (normal)
+const PLAYER_W = 64
+const PLAYER_H = 64
+const PLAYER_Y = GAME_H - 88
+const PLAYER_SPEED_BASE = 12          // ← faster player
 
-const BULLET_SPEED = 9
-const BOMB_SPEED = 4.2
+const BULLET_SPEED = 12               // ← faster bullets
+const BOMB_SPEED = 5.5                // ← faster bombs
 
 const COLS = 6
 const ROWS = 4
@@ -39,7 +39,7 @@ const BARRIER_H = 40
 const BARRIER_Y = PLAYER_Y - 80
 
 const POWERUP_SIZE = 24
-const POWERUP_SPEED = 2.5
+const POWERUP_SPEED = 3.2
 
 type Vec = { x: number; y: number }
 type Invader = { x: number; y: number; alive: boolean; type: number }
@@ -164,9 +164,10 @@ export function InvadersGame({
       barriers: initBarriers(),
       powerups: [],
       dir: 1,
-      speed: 1.2 + waveNum * 0.4,
+      // ← faster enemies, scales harder with waves
+      speed: 1.8 + waveNum * 0.55,
       fireCooldown: 0,
-      bombTimer: 60,
+      bombTimer: 45,
       activeShield: 0,
       activeDouble: 0,
       activeSpeed: 0,
@@ -293,6 +294,8 @@ export function InvadersGame({
     const pw = PLAYER_W
     const ph = PLAYER_H
     const tTime = Date.now() / 50
+
+    // thrusters
     ctx.strokeStyle = s.activeSpeed > 0 ? POWERUP_COLORS.speed : NEON
     ctx.lineWidth = 1.5
     for (let i = 0; i < 3; i++) {
@@ -311,30 +314,31 @@ export function InvadersGame({
       ctx.strokeStyle = POWERUP_COLORS.shield
       ctx.lineWidth = 2
       ctx.beginPath()
-      ctx.arc(px + pw / 2, py + ph / 2, pw * 0.75, 0, Math.PI * 2)
+      ctx.arc(px + pw / 2, py + ph / 2, pw * 0.78, 0, Math.PI * 2)
       ctx.stroke()
       ctx.fillStyle = "rgba(0, 210, 255, 0.08)"
       ctx.fill()
     }
 
     const shipColor = s.activeSpeed > 0 ? POWERUP_COLORS.speed : NEON
+
+    // Ship outline only (so NFT stays the star)
     ctx.strokeStyle = shipColor
     ctx.lineWidth = 2.5
     ctx.lineJoin = "round"
-    // Ship body (outline only so NFT stays visible)
     ctx.beginPath()
     ctx.moveTo(px + pw / 2, py + 2)
-    ctx.lineTo(px + pw + 10, py + ph - 10)
-    ctx.lineTo(px + pw * 0.72, py + ph + 4)
-    ctx.lineTo(px + pw * 0.28, py + ph + 4)
-    ctx.lineTo(px - 10, py + ph - 10)
+    ctx.lineTo(px + pw + 8, py + ph - 8)
+    ctx.lineTo(px + pw * 0.72, py + ph + 3)
+    ctx.lineTo(px + pw * 0.28, py + ph + 3)
+    ctx.lineTo(px - 8, py + ph - 8)
     ctx.closePath()
     ctx.stroke()
 
-    // Big circular NFT cockpit (much larger for mobile)
-    const cockpitSize = 56
+    // LARGE NFT cockpit
+    const cockpitSize = 52
     const cx = px + (pw - cockpitSize) / 2
-    const cy = py + 8
+    const cy = py + 4
     const pimg = playerImgRef.current
     if (pimg && pimg.complete && pimg.naturalWidth > 0) {
       ctx.save()
@@ -391,7 +395,7 @@ export function InvadersGame({
       if (s.activeDouble > 0) s.activeDouble--
       if (s.activeSpeed > 0) {
         s.activeSpeed--
-        s.playerSpeed = PLAYER_SPEED_BASE * 1.6
+        s.playerSpeed = PLAYER_SPEED_BASE * 1.7
       } else {
         s.playerSpeed = PLAYER_SPEED_BASE
       }
@@ -407,17 +411,18 @@ export function InvadersGame({
       )
 
       if (s.fireCooldown > 0) s.fireCooldown--
+      // ← faster fire rate
       if (
         (keysRef.current.has("fire") || keysRef.current.has("autofire")) &&
         s.fireCooldown === 0
       ) {
         if (s.activeDouble > 0) {
-          s.bullets.push({ x: s.playerX + 14, y: PLAYER_Y })
-          s.bullets.push({ x: s.playerX + PLAYER_W - 14, y: PLAYER_Y })
+          s.bullets.push({ x: s.playerX + 12, y: PLAYER_Y })
+          s.bullets.push({ x: s.playerX + PLAYER_W - 12, y: PLAYER_Y })
         } else {
           s.bullets.push({ x: s.playerX + PLAYER_W / 2, y: PLAYER_Y })
         }
-        s.fireCooldown = 18
+        s.fireCooldown = 11
       }
 
       s.bullets = s.bullets.filter((b) => b.y > -20)
@@ -439,14 +444,14 @@ export function InvadersGame({
 
       const alive = s.invaders.filter((i) => i.alive)
       let hitEdge = false
-      const step = s.speed + (ROWS * COLS - alive.length) * 0.08
+      const step = s.speed + (ROWS * COLS - alive.length) * 0.12
       for (const inv of alive) {
         const nx = inv.x + s.dir * step
         if (nx < 6 || nx > GAME_W - INV_SIZE - 6) hitEdge = true
       }
       if (hitEdge) {
         s.dir *= -1
-        for (const inv of s.invaders) if (inv.alive) inv.y += 20
+        for (const inv of s.invaders) if (inv.alive) inv.y += 22
       } else {
         for (const inv of s.invaders) if (inv.alive) inv.x += s.dir * step
       }
@@ -458,7 +463,8 @@ export function InvadersGame({
           x: shooter.x + INV_SIZE / 2,
           y: shooter.y + INV_SIZE,
         })
-        s.bombTimer = Math.max(18, 90 - waveRef.current * 7)
+        // bombs drop more often as waves increase
+        s.bombTimer = Math.max(12, 55 - waveRef.current * 6)
       }
 
       s.bombs = s.bombs.filter((b) => b.y < GAME_H + 20)
