@@ -2,17 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { GrossBro } from "@/lib/gross-bros"
-import { createClient, SupabaseClient } from "@supabase/supabase-js"
-
-let supabase: SupabaseClient | null = null
-
-if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-  supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  )
-}
-
 const GAME_W = 640
 const GAME_H = 560
 
@@ -179,27 +168,24 @@ export function InvadersGame({
     setStatus("over")
     setBest((b) => Math.max(b, scoreRef.current))
 
-    if (!supabase) return
-
     const wallet = resolveWallet(walletAddress)
 
     // Only save scores from real connected wallets (holders)
     // Anonymous / missing wallet = no leaderboard entry = no giveaway eligibility
     if (!wallet || wallet === "Anonymous" || wallet.length < 25) {
-      console.log("Score not saved — connect a Gross Bro wallet to compete for prizes")
+      console.log("Score not saved â connect a Gross Bro wallet to compete for prizes")
       return
     }
 
-    supabase
-      .from("leaderboard")
-      .insert({
-        wallet_address: wallet,
+    fetch("/api/leaderboard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        address: wallet,
         score: scoreRef.current,
         wave: waveRef.current,
-      })
-      .then(({ error }) => {
-        if (error) console.error("Leaderboard insert error:", error)
-      })
+      }),
+    }).catch((error) => console.error("Leaderboard insert error:", error))
   }, [walletAddress])
 
   const drawEnemy = (
@@ -656,7 +642,7 @@ export function InvadersGame({
                 className="font-mono text-[11px] uppercase tracking-[0.3em]"
                 style={{ color: NEON }}
               >
-                XRP-7 · ARCADE
+                XRP-7 Â· ARCADE
               </p>
               <h2
                 className="text-balance text-3xl font-bold tracking-tight"
