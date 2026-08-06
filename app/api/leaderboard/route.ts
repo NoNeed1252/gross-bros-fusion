@@ -1,67 +1,142 @@
 import { NextResponse } from 'next/server'
-import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
+import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
-  if (!isSupabaseConfigured()) {
-    return NextResponse.json({ scores: [] })
+const GROSS_BROS_ISSUER = 'rP1wMvanhfmsm7Af4FcHvSvfhash43LWSY'
+const GROSS_BROS_TAXON = 1
+const XRPL_NODES = [
+  'https://xrplcluster.com',
+  'https://s1.ripple.com:51234',
+  'https://xrpl.link',
+]
+
+function getAdminSupabase() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!url || !serviceRoleKey) {
+    throw new Error('Supabase server credentials are not configured')
   }
 
+  return createClient(url, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+}
+
+function isValidXrplAddress(address: unknown): address is string {
+  return (
+    typeof address === 'string' &&
+    /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(address)
+  )
+}
+
+async function ownsGrossBro(address: string): Promise<boolean> {
+  let successfulResponse = false
+
+  for (const node of XRPL_NODES) {
+    try {
+      const response = await fetch(node, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method: 'account_nfts',
+          params: [{ account: address, ledger_index: 'validated', limit: 400 }],
+        }),
+        signal: AbortSignal.timeout(6000),
+      })
+
+      if (!response.ok) continue
+      const payload = await response.json()
+      if (payload.error) continue
+
+      successfulResponse = true
+      const nfts = payload.result?.account_nfts || []
+      if (
+        nfts.some(
+          (nft: { Issuer?: string; NFTokenTaxon?: number }) =>
+            nft.Issuer === GROSS_BROS_ISSUER &&
+            nft.NFTokenTaxon === GROSS_BROS_TAXON
+        )
+      ) {
+        return true
+      }
+    } catch {
+      continue
+    }
+  }
+
+  if (!successfulResponse) {
+    throw new Error('XRPL ownership verification failed')
+  }
+
+  return false
+}
+
+export async function GET() {
   try {
-    const supabase = getSupabase()
-    // UPDATED: Querying 'operatives' table which exists in 'Gross Bros Stats' DB
-    // mapping wallet_address to address, and total_score to score
+    const supabase = getAdminSupabase()
     const { data, error } = await supabase
-      .from('operatives')
-      .select('wallet_address, total_score, handle')
-      .order('total_score', { ascending: false })
-      .limit(20)
+      .from('leaderboard')
+      .select('wallet_address, score, wave, created_at')
+      .order('score', { ascending: false })
+      .limit(50)
 
     if (error) throw error
 
-    // Map the internal column names to the frontend's expected leaderboard format
-    const formattedScores = (data || []).map((op: any) => ({
-      address: op.wallet_address,
-      score: op.total_score,
-      bro_name: op.handle || 'Operative',
-      wave: 1
-    }))
-
-    return NextResponse.json({ scores: formattedScores })
-  } catch (err) {
-    console.error('Leaderboard GET Error:', err)
-    return NextResponse.json({ scores: [] })
+    return NextResponse.json({
+      scores: (data || []).map((entry) => ({
+        address: entry.wallet_address,
+        score: entry.score,
+        wave: entry.wave,
+        created_at: entry.created_at,
+      })),
+    })
+  } catch (error) {
+    console.error('Leaderboard GET Error:', error)
+    return NextResponse.json({ error: 'Failed to load leaderboard' }, { status: 500 })
   }
 }
 
-export async function POST(req: Request) {
-  if (!isSupabaseConfigured()) {
-    return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
-  }
-
+export async function POST(request: Request) {
   try {
-    const { address, score } = await req.json()
+    const body = await request.json()
+    const { address, score, wave } = body ?? {}
 
-    if (!address || typeof score !== 'number') {
+    if (!isValidXrplAddress(address)) {
+      return NextResponse.json({ error: 'Invalid XRPL wallet address' }, { status: 400 })
+    }
+
+    if (!Number.isInteger(score) || score < 0 || !Number.isInteger(wave) || wave < 1) {
       return NextResponse.json({ error: 'Invalid score data' }, { status: 400 })
     }
 
-    const supabase = getSupabase()
-    // UPDATED: Upsert into 'operatives' table using wallet_address as key
-    const { data, error } = await supabase
-      .from('operatives')
-      .upsert({ 
-        wallet_address: address, 
-        total_score: score,
-        updated_at: new Date().toISOString() 
-      }, { onConflict: 'wallet_address' })
-      .select()
+    if (!(await ownsGrossBro(address))) {
+      return NextResponse.json(
+        { error: 'Gross Bros ownership could not be verified' },
+        { status: 403 }
+      )
+    }
+
+    const { data, error } = await getAdminSupabase()
+      .from('leaderboard')
+      .insert({ wallet_address: address, score, wave })
+      .select('wallet_address, score, wave, created_at')
+      .single()
 
     if (error) throw error
-    return NextResponse.json({ success: true, data })
-  } catch (err) {
-    console.error('Leaderboard POST Error:', err)
+    return NextResponse.json({ success: true, data }, { status: 201 })
+  } catch (error: any) {
+    console.error('Leaderboard POST Error:', error)
+
+    if (error?.message === 'Supabase server credentials are not configured') {
+      return NextResponse.json({ error: 'Server database credentials are not configured' }, { status: 503 })
+    }
+
+    if (error?.message === 'XRPL ownership verification failed') {
+      return NextResponse.json({ error: 'Ownership verification temporarily unavailable' }, { status: 503 })
+    }
+
     return NextResponse.json({ error: 'Failed to submit score' }, { status: 500 })
   }
 }
